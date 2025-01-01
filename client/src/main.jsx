@@ -5,10 +5,6 @@ import SignIn from './SignIn';
 import SignUp from './SignUp';
 import Chat from './chat';
 
-const chatProps = {
-    user: "Test User", // Example prop
-    theme: "light" // Example prop
-};
 
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
@@ -16,7 +12,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Routes>
                 <Route path="/" element={<SignIn />} />
                 <Route path="/signup" element={<SignUp />} />
-                <Route path="/chat" element={<Chat {...chatProps} />} />
+                <Route path="/chat" element={<Chat />} />
                 <Route path="*" element={<Navigate to="/" />} />
             </Routes>
         </Router>
