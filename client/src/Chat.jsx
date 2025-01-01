@@ -45,10 +45,14 @@ function Chat(props) {
     });
 
     //socket
-    const newSocket = io.connect("http://localhost:2000");
-    setSocket(newSocket);
+    if (socket && props.userID) {
+      socket.emit("user-connected", props.userID);
+      socket.on("contacts-list", (contacts) => {
+          setContacts(contacts);
+      });
+    }
 
-  }, []);
+  }, [socket,props.userID]);
 
   const particlesOptions = useMemo(
     () => ({
