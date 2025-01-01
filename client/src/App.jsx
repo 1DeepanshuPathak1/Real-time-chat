@@ -3,7 +3,7 @@ import './app.css';
 import { FiSend, FiMic } from 'react-icons/fi';
 import Particles, { initParticlesEngine } from "@tsparticles/react";
 import { loadFull } from "tsparticles";
-import {io} from 'socket.io-client'
+import io from 'socket.io-client';
 
 const initialContacts = [
   { id: 1, name: 'Alice', lastMessage: 'Hey, how are you?', time: '10:30 AM', unreadCount: 0 },
