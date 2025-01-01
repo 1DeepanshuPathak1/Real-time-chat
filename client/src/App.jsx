@@ -3,6 +3,7 @@ import './app.css';
 import { FiSend, FiMic } from 'react-icons/fi';
 import Particles, { initParticlesEngine } from "@tsparticles/react";
 import { loadFull } from "tsparticles";
+import {io} from 'socket.io-client'
 
 const initialContacts = [
   { id: 1, name: 'Alice', lastMessage: 'Hey, how are you?', time: '10:30 AM', unreadCount: 0 },
@@ -31,12 +32,20 @@ function App() {
   const messagesEndRef = useRef(null);
   const [init, setInit] = useState(false);
 
+  const [socket, setSocket] = useState(null);
+
   useEffect(() => {
+    //particle system
     initParticlesEngine(async (engine) => {
       await loadFull(engine);
     }).then(() => {
       setInit(true);
     });
+
+    //socket
+    const newSocket = io.connect("http://localhost:2000");
+    setSocket(newSocket);
+
   }, []);
 
   const particlesOptions = useMemo(
