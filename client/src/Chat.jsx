@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import './app.css';
+import './css/chat.css';
 import { FiSend, FiMic } from 'react-icons/fi';
 import Particles, { initParticlesEngine } from "@tsparticles/react";
 import { loadFull } from "tsparticles";
@@ -23,7 +23,9 @@ function truncateMessage(message, maxLength = 30) {
   return message.substring(0, maxLength - 3) + '...';
 }
 
-function App() {
+function Chat(props) {
+  console.log('Chat component props:', props);
+
   const [contacts, setContacts] = useState(initialContacts);
   const [selectedContact, setSelectedContact] = useState(contacts[0]);
   const [messages, setMessages] = useState(initialMessages);
@@ -273,4 +275,4 @@ function App() {
   );
 }
 
-export default App;
+export default Chat;

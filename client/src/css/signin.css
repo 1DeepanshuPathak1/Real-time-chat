@@ -1,0 +1,129 @@
+.signin-page html,
+.signin-page body {
+    margin: -8px;
+    padding: 0;
+    height: auto;
+    width: 100%;
+    font-family: Arial, sans-serif;
+    overflow-x: hidden;
+}
+
+
+
+.signin-background {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background-size: cover;
+    background-position: center;
+    filter: blur(2.5px);
+    z-index: -1;
+}
+
+
+.signin-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+
+.form-container {
+    width: 380px;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    transition: box-shadow 1s ease;
+}
+
+.form-container:hover {
+    box-shadow:
+        10px 10px 20px rgba(0, 255, 0, 0.5),
+        -10px -10px 20px rgba(0, 255, 0, 0.4),
+        0px 0px 100px rgba(0, 255, 0, 0.3);
+}
+
+
+h2 {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #333;
+}
+
+
+.signin-container input {
+    width: 95%;
+    height: 40px;
+    margin-bottom: 15px;
+    padding: 0 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+.signin-container button {
+    width: 100%;
+    height: 45px;
+    background-color: rgba(0, 0, 0, 0.6);
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    transition: box-shadow 0.5s ease;
+}
+
+.signin-container button:hover {
+    box-shadow: 0 0 30px rgba(0, 255, 0, 0.5);
+}
+
+
+.signin-container p {
+    text-align: center;
+    margin-top: 15px;
+}
+
+.signin-container p a {
+    color: rgb(0, 110, 255);
+    text-decoration: underline;
+}
+
+.success-message {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 128, 0, 0.8);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+    font-size: 16px;
+    font-weight: bold;
+    z-index: 100;
+    animation: fadeOut 2s ease forwards; 
+}
+
+
+@keyframes fadeOut {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+.redirect-message {
+    color: red; 
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+.error-message{
+    color: red;
+}
+

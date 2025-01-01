@@ -21,6 +21,7 @@ body {
   align-items: center;
   height: 100vh;
   background-color: #f0f2f5;
+  top: 10%;
 }
 
 .chat-container {
@@ -226,8 +227,6 @@ body {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
   background-color: rgba(44, 43, 43, 0.8);
-  backdrop-filter: blur();
-  -webkit-backdrop-filter: blur();
 }
 
 .message.sent .message-content {
