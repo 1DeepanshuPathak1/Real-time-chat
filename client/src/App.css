@@ -1,42 +1,95 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+/* General Layout */
+.container {
+  display: flex; /* Align contacts and main content side-by-side */
+  height: 100vh; /* Full screen height */
+  padding: 0%;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+/* Contacts Section */
+.contacts {
+  background-color: #0d92f4;
+  width: 20%; /* 20% of the screen width */
+  height: 100vh; /* Full screen height */
+  padding: 20px;
+  color: white;
+  border-right: 2px solid black;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.contacts p {
+  font-size: 2vw;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.contacts ul {
+  list-style-type: none;
+  padding: 0;
 }
 
-.card {
-  padding: 2em;
+.contacts ul li {
+  padding: 10px 0;
+  cursor: pointer;
 }
 
-.read-the-docs {
-  color: #888;
+.contacts ul li:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Main Content Section (Messages + Textbox) */
+.main-content {
+  display: flex;
+  flex-direction: column; /* Stack messages and textbox vertically */
+  width: 80%; /* Takes up the remaining width */
+  height: 100vh; /* Full screen height */
+}
+
+/* Messages Display Section */
+.messages {
+  flex-grow: 1; /* Take up all available space */
+  padding: 20px;
+  background-color: #f0f0f0;
+  overflow-y: auto; /* Allow scrolling when messages overflow */
+}
+
+.messages-display {
+  display: flex;
+  flex-direction: column;
+}
+
+.message {
+  margin-bottom: 10px;
+}
+
+.user {
+  font-weight: bold;
+}
+
+/* Textbox Section at the bottom */
+.textBox {
+  padding: 10px;
+  background-color: #77cdff;
+  border-top: 2px solid black;
+}
+
+.textBox textarea {
+  width: 100%;
+  height: 60px;
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+}
+
+.textBox button {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  padding: 10px 20px;
+  background-color: #0d92f4;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.textBox button:hover {
+  background-color: #16423c;
 }
