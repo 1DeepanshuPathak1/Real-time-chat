@@ -4,13 +4,13 @@ import './css/signin.css';
 
 function SignIn() {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
-    const [userID, setUserID] = useState('');
+    const [email, setEmail] = useState('');
     const [errorMessage, setErrorMessage] = useState('');
     const [userData, setUserData] = useState(null);
     const [contacts, setContacts] = useState([]);
 
     const handleChange = (e) => {
-        setUserID(e.target.value);
+        setEmail(e.target.value);
         setErrorMessage('');
     };
 
@@ -54,8 +54,8 @@ function SignIn() {
         }
     };
 
-    if (isLoggedIn && userData) {
-        return <Chat userID={userID} userData={userData} />;
+    if (isLoggedIn && contacts!=null) {
+        return <Chat email={email} contacts={contacts} />;
     }
 
     return (
@@ -65,10 +65,10 @@ function SignIn() {
                 <h2>Sign In</h2>
                 <form onSubmit={handleSubmit}>
                     <input
-                        type="text"
-                        name="userID"
+                        type="email"
+                        name="email"
                         placeholder="Enter User ID (format: user123)"
-                        value={userID}
+                        value={email}
                         onChange={handleChange}
                         required
                     />
