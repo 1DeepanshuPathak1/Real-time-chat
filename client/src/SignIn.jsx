@@ -4,41 +4,33 @@ import './css/signin.css';
 
 function SignIn() {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
-    const [userID, setUserID] = useState('');
+    const [email, setEmail] = useState('');
     const [errorMessage, setErrorMessage] = useState('');
-    const [userData, setUserData] = useState(null);
+    const [contacts, setContacts] = useState({});
 
     const handleChange = (e) => {
-        setUserID(e.target.value);
+        setEmail(e.target.value);
         setErrorMessage('');
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch('http://localhost:2000/api/signin', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ userID })
-            });
-            
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Invalid user ID');
-            }
-            
-            const userData = await response.json();
-            setUserData(userData);
-            setIsLoggedIn(true);
+            const response = await fetch(`http://localhost:2000/getContacts/${email}`, {
+                method: 'GET'                
+            })
+
+            response.json().then((data)=>{
+                setContacts(data.contacts);
+                setIsLoggedIn(true);
+            })
         } catch (error) {
             setErrorMessage(error.message);
         }
     };
 
-    if (isLoggedIn && userData) {
-        return <Chat userID={userID} userData={userData} />;
+    if (isLoggedIn && contacts!=null) {
+        return <Chat email={email} contacts={contacts} />;
     }
 
     return (
@@ -48,10 +40,10 @@ function SignIn() {
                 <h2>Sign In</h2>
                 <form onSubmit={handleSubmit}>
                     <input
-                        type="text"
-                        name="userID"
+                        type="email"
+                        name="email"
                         placeholder="Enter User ID (format: user123)"
-                        value={userID}
+                        value={email}
                         onChange={handleChange}
                         required
                     />

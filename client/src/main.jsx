@@ -7,7 +7,6 @@ import Chat from './chat';
 
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-    <React.StrictMode>
         <Router>
             <Routes>
                 <Route path="/" element={<SignIn />} />
@@ -16,5 +15,4 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 <Route path="*" element={<Navigate to="/" />} />
             </Routes>
         </Router>
-    </React.StrictMode>
 );
