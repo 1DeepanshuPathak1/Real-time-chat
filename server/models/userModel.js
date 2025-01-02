@@ -32,4 +32,15 @@ const addNewUser = (userDetails, cb)=>{
     })
 }
 
-module.exports = {fetchUser, addNewUser};
+const fetchContacts = (email, cb)=>{
+  userModel.findOne({email : email}, {contacts : true, _id : false})
+  .then((contacts)=>{
+    cb({contacts : contacts, message : "sucess"});
+  })
+  .catch((err)=>{
+    cb({message : err.errmsg, code : err.code});
+  })
+
+}
+
+module.exports = {fetchUser, addNewUser, fetchContacts};

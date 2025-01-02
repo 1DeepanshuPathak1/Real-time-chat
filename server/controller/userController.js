@@ -1,4 +1,4 @@
-const { fetchUser, addNewUser} = require("../models/userModel");
+const { fetchUser, addNewUser, fetchContacts} = require("../models/userModel");
 
 const findUser = (req,res)=>{
     // console.log("control at findUser");
@@ -22,7 +22,7 @@ const findUser = (req,res)=>{
     })
 }
 
-const createUser = async (req,res)=>{
+const createUser = (req,res)=>{
     const userDetails = {
         email : req.body.email,
         name : req.body.name
@@ -42,4 +42,22 @@ const createUser = async (req,res)=>{
     })
 }
 
-module.exports = {findUser, createUser};
+const findContacts = (req,res)=>{
+    console.log("finding contacts");
+    const userEmail = req.params.email;
+    fetchContacts(userEmail, (data)=>{
+        if(data.message == "sucess"){
+            if(data.contacts==null){
+                res.status(500).send("no contacts found");
+            }
+            else{
+                res.status(200).send(data.contacts);
+            }
+        }
+        else{
+            res.status(500).send(`Failed to fetch contacts\n Code : ${data.code}\n Message : ${data.message}`);
+        }
+    });
+}
+
+module.exports = {findUser, createUser, findContacts};
