@@ -1,4 +1,5 @@
 const { fetchUser, addNewUser, fetchContacts} = require("../models/userModel");
+const { fetchMessages } = require("../models/messageModel");
 
 const findUser = (req,res)=>{
     // console.log("control at findUser");
@@ -60,4 +61,18 @@ const findContacts = (req,res)=>{
     });
 }
 
-module.exports = {findUser, createUser, findContacts};
+const getMessages = (roomID)=>{
+    fetchMessages(roomID, (data)=>{
+        if(data.message = "sucess"){
+            console.log("messages", data.messages);
+        }
+        else if(data.message = "no messages"){
+            console.log("no messages in this room");
+        }
+        else{
+            console.log(`Error while fetching messages\n Code ${data.code}\n Message : ${data.message}`);
+        }
+    })
+}
+
+module.exports = {findUser, createUser, findContacts, getMessages};

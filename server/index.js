@@ -1,6 +1,6 @@
 const {app, io, express, startServer} = require("./utils/util");
 const cors = require("cors");
-const {findUser, createUser, findContacts} = require("./controller/userController");
+const {findUser, createUser, findContacts, getMessages} = require("./controller/userController");
 
 //middleware
 app.use(cors());
@@ -12,7 +12,7 @@ app.get("/checkup", (req,res)=>{res.send("server is working")});//server checkup
 app.get("/findUser/:email", findUser);
 app.get("/getContacts/:email", findContacts);
 
-app.post("/createUser", createUser)
+app.post("/createUser", createUser);
 
 //socket.io requests
 io.on("connection", (socket) => {
@@ -23,13 +23,14 @@ io.on("connection", (socket) => {
         socket.to(roomID).emit("received-message", { socketID: socket.id, message });
     });
     
-    socket.on("join-room", (roomID) => {
-        socket.join(roomID);
+    socket.on("join-room", async (roomID) => {
+        await socket.join(roomID);
         socket.emit("joined-room", { roomID, socketID: socket.id });
+        getMessages(roomID);
     });
 
-    socket.on("leave-room", (roomID) => {
-        socket.leave(roomID);
+    socket.on("leave-room", async (roomID) => {
+        await socket.leave(roomID);
         socket.emit("left-room", { roomID, socketID: socket.id });
     });
 });

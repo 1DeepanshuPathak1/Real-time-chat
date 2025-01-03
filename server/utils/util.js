@@ -5,6 +5,8 @@ const { Server } = require("socket.io");
 
 //mongo
 const mongoose = require('mongoose');
+const chatDB = mongoose.connection.useDb("Chats");
+const messageDB = mongoose.connection.useDb("Messages");
 
 
 //express
@@ -22,7 +24,7 @@ const io = new Server(server, {
 async function startServer(){
     try{
         //starting database
-        await mongoose.connect("mongodb://localhost:27017/Chats").then(()=>{
+        await mongoose.connect("mongodb://localhost:27017/").then(()=>{
             console.log("database started");
         })
 
@@ -36,4 +38,4 @@ async function startServer(){
     }
 }
 
-module.exports = {app, io, mongoose, express, server, startServer}
+module.exports = {app, io, mongoose, express, server, startServer, chatDB, messageDB};

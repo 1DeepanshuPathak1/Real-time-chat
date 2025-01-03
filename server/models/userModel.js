@@ -1,12 +1,12 @@
-const {mongoose} = require("../utils/util");
+const {mongoose, chatDB} = require("../utils/util");
 
-const userSchema = mongoose.Schema({
+const userSchema = new mongoose.Schema({
   name : {type:String, required : true},
   email : {type:String, required : true, unique : true}
 })
 
 //models
-const userModel = mongoose.model("Chats", userSchema, "users");
+const userModel = chatDB.model("Chats", userSchema, "users");
 
 //functions
 const fetchUser = (userEmail, cb)=>{
