@@ -62,8 +62,12 @@ const findContacts = (req,res)=>{
 }
 
 const getMessages = (roomID)=>{
+    //check cache for messages [todo]
+
+    //if not in cache fetch messages from DB
     fetchMessages(roomID, (data)=>{
         if(data.message = "sucess"){
+            //update cache with messages [todo]
             console.log("messages", data.messages);
         }
         else if(data.message = "no messages"){
