@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Chat from './chat';
 import './css/signin.css';
 
@@ -7,19 +7,23 @@ function SignIn() {
     const [email, setEmail] = useState('');
     const [errorMessage, setErrorMessage] = useState('');
     const [userData, setUserData] = useState(null);
-    const [contacts, setContacts] = useState([]);
+    const [contacts, setContacts] = useState({});
 
     const handleChange = (e) => {
         setEmail(e.target.value);
         setErrorMessage('');
     };
 
+    useEffect(()=>{
+        console.log("updated contacts", Object.keys(contacts).length);
+    }, [contacts])
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setErrorMessage('');
         
         try {
-            const userResponse = await fetch(`http://localhost:2000/findUser/${userID}`, {
+            const userResponse = await fetch(`http://localhost:2000/findUser/${email}`, {
                 method: 'GET'
             });
             
@@ -31,7 +35,7 @@ function SignIn() {
             const userData = await userResponse.json();
             setUserData(userData);
 
-            const contactsResponse = await fetch(`http://localhost:2000/getContacts/${userID}`, {
+            const contactsResponse = await fetch(`http://localhost:2000/getContacts/${email}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json'
@@ -43,8 +47,8 @@ function SignIn() {
             }
     
             const contactsData = await contactsResponse.json();
-            setContacts(contactsData);
-            setIsLoggedIn(true); 
+            setContacts(contactsData.contacts);
+            setIsLoggedIn(true);
             
         } catch (error) {
             setErrorMessage(error.message);
@@ -54,7 +58,7 @@ function SignIn() {
         }
     };
 
-    if (isLoggedIn && contacts!=null) {
+    if (isLoggedIn && Object.keys(contacts).length>0) {
         return <Chat email={email} contacts={contacts} />;
     }
 
