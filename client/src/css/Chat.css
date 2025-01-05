@@ -28,7 +28,7 @@ body {
   display: flex;
   width: 100%;
   height: 100vh;
-  background-color: #ffffff;
+  background-color: #040404;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
 }
 
@@ -36,15 +36,15 @@ body {
   width: 30%;
   max-width: 420px;
   background-color: #000000;
-  border-right: 2px solid #128C7E;
+  border-right: 2px solid #1f5953;
   display: flex;
   flex-direction: column;
 }
 
 .contact-list-header {
   padding: 20px;
-  background-color: #f0f2f5;
-  border-bottom: 1px solid #e0e0e0;
+  background-color: #242527;
+  border-bottom: 1px solid #1f5953;
 }
 
 .contact-list-header h1 {
@@ -68,11 +68,11 @@ body {
 }
 
 .contact-item:hover {
-  background-color: #f5f5f5;
+  background-color: #222222;
 }
 
 .contact-item.selected {
-  background-color: #e8e8e8;
+  background-color: #2c2c2c;
 }
 
 .contact-avatar {
@@ -95,7 +95,7 @@ body {
 .contact-name-time h2 {
   font-size: 16px;
   font-weight: 600;
-  color: #333333;
+  color: rgb(255, 255, 255, 0.9);
 }
 
 .contact-name-time span {
@@ -138,8 +138,8 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 15px 20px;
-  background-color: #f0f2f5;
-  border-bottom: 1px solid #e0e0e0;
+  background-color: #242527;
+  border-bottom: 1px solid #1f5953;
 }
 
 .chat-header-info {
@@ -157,7 +157,7 @@ body {
 .chat-header-info h2 {
   font-size: 18px;
   font-weight: 600;
-  color: #333333;
+  color: rgb(255, 255, 255, 0.9);
 }
 
 .simulate-message-btn {
@@ -230,7 +230,7 @@ body {
 }
 
 .message.sent .message-content {
-  background-color: rgba(44, 43, 43, 0.5);
+  background-color: #161616;
 }
 
 .message-content:hover {
@@ -241,12 +241,12 @@ body {
 .message-content p {
   font-size: 14px;
   line-height: 1.4;
-  color: #333333;
+  color: #c7c7c7;
 }
 
 .message-time {
   font-size: 11px;
-  color: purple;
+  color: rgb(255, 1, 255);
   display: block;
   margin-top: 4px;
   text-align: right;
@@ -255,7 +255,7 @@ body {
 .message-input-container {
   display: flex;
   padding: 15px;
-  background-color: #f0f2f5;
+  background-color: #242527;
   border-top: 1px solid #128C7E;
 }
 
@@ -267,6 +267,7 @@ body {
   font-size: 15px;
   background-color: #000000;
   transition: box-shadow 0.3s ease;
+  color: white;
 }
 
 .message-input:focus {
