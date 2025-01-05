@@ -1,13 +1,19 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import './css/chat.css';
-import { FiSend, FiMic } from 'react-icons/fi';
-import Particles, { initParticlesEngine } from "@tsparticles/react";
-import { loadFull } from "tsparticles";
+import { FiSend, FiMic, FiSmile, FiPaperclip, FiImage, FiCamera, FiFile, FiUser, FiBarChart2, FiEdit } from 'react-icons/fi';
 import io from 'socket.io-client';
+// import { DrawingCanvas } from './components/drawing-canvas';
+// import { MediaCarousel } from './components/media-carousel';
+import { EmojiPickerComponent } from './components/EmojiPicker';
+import { ParticlesBackground } from './components/ParticlesBackground';
+import { ContactList } from './components/Contactlist';
+import { ChatHeader } from './components/ChatHeader';
+import { MessageList } from './components/MessageList';
+import { CameraOverlay } from './components/CameraOverlay';
+
 
 
 function Chat(props) {
-  //aise he
   const [contacts, setContacts] = useState({});
   const [selectedContact, setSelectedContact] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -16,86 +22,49 @@ function Chat(props) {
   const messagesEndRef = useRef(null);
   const [init, setInit] = useState(false);
   const [socket, setSocket] = useState(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const fileInputRef = useRef(null);
+  const documentInputRef = useRef(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const videoRef = useRef(null);
+  const [stream, setStream] = useState(null);
+  // const [showDrawing, setShowDrawing] = useState(false);
 
   useEffect(() => {
     const newSocket = io.connect("http://localhost:2000");
     setSocket(newSocket);
     setContacts(props.contacts);
-    
-    // Set initial selected contact
     if (props.contacts && Object.keys(props.contacts).length > 0) {
       setSelectedContact(props.contacts[Object.keys(props.contacts)[0]]);
     }
-    //initialize particles
-    initParticlesEngine(async (engine) => {
-      await loadFull(engine);
-    }).then(() => {
-      setInit(true);
-    });
-  }, [props.contacts]);
+    const handleClickOutside = (event) => { 
+      if (showEmojiPicker || showAttachMenu) { 
+        setShowEmojiPicker(false); 
+        setShowAttachMenu(false); 
+      } 
+    }; 
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [props.contacts], [showEmojiPicker, showAttachMenu]);
 
   useEffect(() => {
-    if(socket){
+    if (socket) {
 
-      socket.on("joined-room", (data)=>{
+      socket.on("joined-room", (data) => {
         console.log("joined room", data.roomID);
         console.log("id : ", data.socketID);
       })
-      socket.on("left-room", (data)=>{
+      socket.on("left-room", (data) => {
         console.log("left room", data.roomID);
         console.log("id : ", data.socketID);
       })
-      socket.on("received-message", (data)=>{
-        console.log("message from : " ,data.socketID);
+      socket.on("received-message", (data) => {
+        console.log("message from : ", data.socketID);
         console.log("in room : ", data.roomID);
       })
     }
   }, [socket]);
-
-  const particlesOptions = useMemo(
-    () => ({
-      fullScreen: { enable: false },
-      background: { color: { value: "transparent" } },
-      fpsLimit: 120,
-      interactivity: {
-        events: {
-          onClick: { enable: true, mode: "push" },
-          onHover: { enable: true, mode: "repulse" },
-        },
-        modes: {
-          push: { quantity: 4 },
-          repulse: { distance: 200, duration: 0.4 },
-        },
-      },
-      particles: {
-        color: { value: "#128C7E" },
-        links: {
-          color: "#128C7E",
-          distance: 150,
-          enable: true,
-          opacity: 0.5,
-          width: 1,
-        },
-        move: {
-          direction: "none",
-          enable: true,
-          outModes: { default: "bounce" },
-          random: false,
-          speed: 1,
-          straight: false,
-        },
-        number: {
-          density: { enable: true, area: 800 },
-          value: 80,
-        },
-        opacity: { value: 0.5 },
-        shape: { type: "circle" },
-        size: { value: { min: 1, max: 5 } },
-      },
-      detectRetina: true,
-    }),
-    [],
-  );
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -114,7 +83,7 @@ function Chat(props) {
       };
       setMessages([...messages, newMessage]);
       setInputMessage('');
-      
+
       if (socket) {
         socket.emit('send-message', {
           roomId: selectedContact.roomID,
@@ -124,81 +93,212 @@ function Chat(props) {
     }
   };
 
-  const handleContactClick = (contact) => {
-    setSelectedContact(contact);
+  const onEmojiClick = (emojiObject) => {
+    setInputMessage(prevInput => prevInput + emojiObject.emoji);
+    setShowEmojiPicker(false);
+  }
+
+  const handleFileUpload = (event, type) => {
+    const file = event.target.files[0];
+    if (file) {
+      if (type === 'image' && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const newMessage = {
+            id: messages.length + 1,
+            sender: 'You',
+            content: e.target.result,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            type: 'image'
+          };
+          setMessages([...messages, newMessage]);
+        };
+        reader.readAsDataURL(file);
+      } else if (type === 'document') {
+        const fileUrl = URL.createObjectURL(file);
+        const newMessage = {
+          id: messages.length + 1,
+          sender: 'You',
+          content: `📄 ${file.name}`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          type: 'document',
+          fileName: file.name,
+          fileUrl: fileUrl
+        };
+        setMessages([...messages, newMessage]);
+      }
+    }
+    setShowAttachMenu(false);
   };
+  const handleDocumentClick = (fileUrl) => {
+    if (fileUrl) {
+      window.open(fileUrl, '_blank');
+    }
+  };
+
+  const startCamera = async () => {
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 1280, height: 720 }
+      });
+      setStream(mediaStream);
+      setShowCamera(true);
+      setShowAttachMenu(false);
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+          videoRef.current.play().catch(console.error);
+        }
+      }, 100);
+    } catch (err) {
+      console.error("Error accessing camera:", err);
+    }
+  };
+
+  const captureImage = () => {
+    if (videoRef.current) {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      canvas.getContext('2d').drawImage(videoRef.current, 0, 0);
+      const imageData = canvas.toDataURL('image/jpeg');
+
+      const newMessage = {
+        id: messages.length + 1,
+        sender: 'You',
+        content: imageData,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        type: 'image'
+      };
+      setMessages([...messages, newMessage]);
+
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      setShowCamera(false);
+      setShowAttachMenu(false);
+    }
+  };
+
+  // const handleDrawingSend = (imageData) => {
+  //   const newMessage = {
+  //     id: message.length + 1,
+  //     sender: 'You',
+  //     content: imageData,
+  //     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  //     type: 'image'
+  //   };
+  //   setMessages([...messages, newMessage]);
+  // };
 
   return (
     <div className="app-container">
       <div className="chat-container">
-        <div className="contact-list">
-          <div className="contact-list-header">
-            <h1>Chats</h1>
-          </div>
-          <div className="contact-list-scroll">
-            {Object.entries(contacts).map(([key, contact]) => (
-              <div
-                key={key}
-                className={`contact-item ${selectedContact?.roomID === contact.roomID ? 'selected' : ''}`}
-                onClick={() => handleContactClick(contact)}
-              >
-                <img
-                  src={`https://api.dicebear.com/6.x/initials/svg?seed=${contact.name}`}
-                  alt={contact.name}
-                  className="contact-avatar"
-                />
-                <div className="contact-info">
-                  <div className="contact-name-time">
-                    <h2>{contact.name}</h2>
-                  </div>
-                </div>
-                {contact.unreadCount > 0 && (
-                  <div className="unread-count">{contact.unreadCount}</div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+        <ContactList
+          contacts={contacts}
+          selectedContact={selectedContact}
+          onContactClick={setSelectedContact}
+        />
 
         <div className="chat-window">
-          <div className="chat-header">
-            {selectedContact && (
-              <div className="chat-header-info">
-                <img
-                  src={`https://api.dicebear.com/6.x/initials/svg?seed=${selectedContact.name}`}
-                  alt={selectedContact.name}
-                  className="chat-header-avatar"
-                />
-                <h2>{selectedContact.name}</h2>
-              </div>
-            )}
-          </div>
+          <ChatHeader selectedContact={selectedContact} />
 
           <div className="messages-container">
-            {init && (
-              <Particles
-                id="tsparticles"
-                options={particlesOptions}
-                className="particles-background"
-              />
-            )}
-            <div className="messages-scroll">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`message ${message.sender === 'You' ? 'sent' : 'received'}`}
-                >
-                  <div className="message-content">
-                    <p>{message.content}</p>
-                    <span className="message-time">{message.time}</span>
-                  </div>
-                </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
+            <ParticlesBackground />
+            <MessageList
+              messages={messages}
+              messagesEndRef={messagesEndRef}
+              handleDocumentClick={handleDocumentClick}
+            />
           </div>
 
+          {showCamera && (
+            <CameraOverlay
+              videoRef={videoRef}
+              onCapture={captureImage}
+              onClose={() => setShowCamera(false)}
+              stream={stream}
+            />
+          )}
+          {/* {showDrawing && (
+            <DrawingCanvas
+              onClose={() => setShowDrawing(false)}
+              onSend={handleDrawingSend}
+            />
+          )} */}
+
+
           <form onSubmit={handleSendMessage} className="message-input-container">
+            <button
+              type="button"
+              className="emoji-button"
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                setShowEmojiPicker((prev) => !prev); 
+                setShowAttachMenu(false); 
+              }}
+            >
+              <FiSmile />
+            </button>
+            <button
+              type="button"
+              className="attach-button"
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                setShowAttachMenu((prev) => !prev); 
+                setShowEmojiPicker(false); 
+              }}
+            >
+              <FiPaperclip />
+            </button>
+            {showAttachMenu && (
+              <div className="attach-menu" onClick={(e) => e.stopPropagation()}>
+                <button onClick={() => fileInputRef.current?.click()}>
+                  <FiImage />
+                  <span>Photos & videos</span>
+                </button>
+                <button onClick={startCamera}>
+                  <FiCamera />
+                  <span>Camera</span>
+                </button>
+                <button onClick={() => documentInputRef.current?.click()}>
+                  <FiFile />
+                  <span>Document</span>
+                </button>
+                <button onClick={() => {
+                  setShowAttachMenu(false);
+                }}>
+                  <FiUser />
+                  <span>Contact</span>
+                </button>
+                {/* <button onClick={() => {
+                  setShowAttachMenu(false);
+                  setShowDrawing(true);
+                }}>
+                  <FiEdit />
+                  <span>Drawing</span>
+                </button> */}
+              </div>
+            )}
+            <EmojiPickerComponent
+              show={showEmojiPicker}
+              onEmojiClick={onEmojiClick}
+              onClick={(e) => e.stopPropagation()}
+            />
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={(e) => handleFileUpload(e, 'image')}
+              accept="image/*,video/*"
+              style={{ display: 'none' }}
+            />
+            <input
+              type="file"
+              ref={documentInputRef}
+              onChange={(e) => handleFileUpload(e, 'document')}
+              accept=".doc,.docx,.pdf,.txt,.xls,.xlsx"
+              style={{ display: 'none' }}
+            />
             <input
               type="text"
               placeholder="Type a message"
