@@ -13,6 +13,7 @@ import { CameraOverlay } from './components/CameraOverlay';
 
 
 
+
 function Chat(props) {
   const [contacts, setContacts] = useState({});
   const [selectedContact, setSelectedContact] = useState(null);
@@ -29,6 +30,7 @@ function Chat(props) {
   const [showCamera, setShowCamera] = useState(false);
   const videoRef = useRef(null);
   const [stream, setStream] = useState(null);
+  const [isDark, setIsDark] = useState(true);
   // const [showDrawing, setShowDrawing] = useState(false);
 
   useEffect(() => {
@@ -38,12 +40,20 @@ function Chat(props) {
     if (props.contacts && Object.keys(props.contacts).length > 0) {
       setSelectedContact(props.contacts[Object.keys(props.contacts)[0]]);
     }
-    const handleClickOutside = (event) => { 
-      if (showEmojiPicker || showAttachMenu) { 
-        setShowEmojiPicker(false); 
-        setShowAttachMenu(false); 
-      } 
-    }; 
+    const handleClickOutside = (event) => {
+      const emojiPicker = document.querySelector('.emoji-picker-container');
+      const emojiButton = document.querySelector('.emoji-button');
+      const attachMenu = document.querySelector('.attach-menu');
+      const attachButton = document.querySelector('.attach-button');
+      const themeToggleButton = document.querySelector('.theme-toggle-button');
+      if (!emojiPicker?.contains(event.target) && !emojiButton?.contains(event.target) && !themeToggleButton?.contains(event.target)) {
+        setShowEmojiPicker(false);
+      }
+      
+      if (!attachMenu?.contains(event.target) && !attachButton?.contains(event.target)) {
+        setShowAttachMenu(false);
+      }
+    };
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, [props.contacts], [showEmojiPicker, showAttachMenu]);
@@ -95,7 +105,6 @@ function Chat(props) {
 
   const onEmojiClick = (emojiObject) => {
     setInputMessage(prevInput => prevInput + emojiObject.emoji);
-    setShowEmojiPicker(false);
   }
 
   const handleFileUpload = (event, type) => {
@@ -180,6 +189,10 @@ function Chat(props) {
     }
   };
 
+  const handleThemeChange = (newTheme) => {
+    setIsDark(newTheme);
+  };
+  
   // const handleDrawingSend = (imageData) => {
   //   const newMessage = {
   //     id: message.length + 1,
@@ -201,7 +214,7 @@ function Chat(props) {
         />
 
         <div className="chat-window">
-          <ChatHeader selectedContact={selectedContact} />
+          <ChatHeader selectedContact={selectedContact} onThemeChange={handleThemeChange}  />
 
           <div className="messages-container">
             <ParticlesBackground />
@@ -280,7 +293,8 @@ function Chat(props) {
                 </button> */}
               </div>
             )}
-            <EmojiPickerComponent
+            <EmojiPickerComponent 
+              theme= {isDark ? 'dark' : 'light'}
               show={showEmojiPicker}
               onEmojiClick={onEmojiClick}
               onClick={(e) => e.stopPropagation()}
