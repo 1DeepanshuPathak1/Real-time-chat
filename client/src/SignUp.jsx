@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import './css/signin.css';
@@ -28,6 +28,7 @@ function SignUp() {
   });
   const [errorMessage, setErrorMessage] = useState('');
   const [showMessage, setShowMessage] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -36,21 +37,63 @@ function SignUp() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsLoading(true);
+    setErrorMessage('');
+    
     if (formData.password !== formData.confirmPassword) {
       setErrorMessage('Passwords do not match!');
+      setIsLoading(false);
       return;
     }
 
     try {
+      console.log('Creating user with email:', formData.email);
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+      console.log('User created successfully:', userCredential.user);
+      
+      // Save user data to Firestore
       await setDoc(doc(db, 'users', userCredential.user.uid), {
         name: `${formData.firstName} ${formData.lastName}`,
-        email: formData.email
+        email: formData.email,
+        createdAt: new Date().toISOString()
       });
-      setShowMessage(true);
-      setTimeout(() => navigate('/'), 2000);
+      console.log('User data saved to Firestore');
+      
+      // Send email verification
+      try {
+        await sendEmailVerification(userCredential.user);
+        console.log('Verification email sent');
+        setShowMessage(true);
+        setTimeout(() => navigate('/'), 3000);
+      } catch (emailError) {
+        console.warn('Could not send verification email:', emailError);
+        // Still proceed with account creation
+        setShowMessage(true);
+        setTimeout(() => navigate('/'), 2000);
+      }
+      
     } catch (error) {
-      setErrorMessage(error.message);
+      console.error('Sign up error:', error);
+      console.error('Error code:', error.code);
+      
+      switch (error.code) {
+        case 'auth/email-already-in-use':
+          setErrorMessage('An account with this email already exists.');
+          break;
+        case 'auth/invalid-email':
+          setErrorMessage('Invalid email address format.');
+          break;
+        case 'auth/weak-password':
+          setErrorMessage('Password should be at least 6 characters long.');
+          break;
+        case 'auth/network-request-failed':
+          setErrorMessage('Network error. Please check your connection.');
+          break;
+        default:
+          setErrorMessage(`Sign up failed: ${error.message}`);
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -67,6 +110,7 @@ function SignUp() {
             value={formData.firstName}
             onChange={handleChange}
             required
+            disabled={isLoading}
           />
           <input
             type="text"
@@ -75,6 +119,7 @@ function SignUp() {
             value={formData.lastName}
             onChange={handleChange}
             required
+            disabled={isLoading}
           />
           <input
             type="email"
@@ -83,14 +128,16 @@ function SignUp() {
             value={formData.email}
             onChange={handleChange}
             required
+            disabled={isLoading}
           />
           <input
             type="password"
             name="password"
-            placeholder="Password"
+            placeholder="Password (min 6 characters)"
             value={formData.password}
             onChange={handleChange}
             required
+            disabled={isLoading}
           />
           <input
             type="password"
@@ -99,8 +146,11 @@ function SignUp() {
             value={formData.confirmPassword}
             onChange={handleChange}
             required
+            disabled={isLoading}
           />
-          <button type="submit">Sign Up</button>
+          <button type="submit" disabled={isLoading}>
+            {isLoading ? 'Creating Account...' : 'Sign Up'}
+          </button>
         </form>
         <p>
           Already have an account? <a href="/">Sign In</a>
@@ -108,7 +158,7 @@ function SignUp() {
         {errorMessage && <div className="error-message">{errorMessage}</div>}
         {showMessage && (
           <div className="success-message">
-            Sign-up successful! Redirecting to Sign In...
+            Account created successfully! A verification email has been sent. Redirecting to Sign In...
           </div>
         )}
       </div>

@@ -491,6 +491,14 @@ body {
   color: var(--accent-color);
 }
 
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  font-size: 18px;
+}
+
 @media (max-width: 768px) {
   .chat-container {
     flex-direction: column;

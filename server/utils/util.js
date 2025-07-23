@@ -29,8 +29,8 @@ async function startServer(){
         })
 
         //starting server
-        server.listen(2000, ()=>{
-            console.log("server started on http://localhost:2000");
+        server.listen(3001, ()=>{
+            console.log("server started on http://localhost:3001");
         })
     }
     catch(err){

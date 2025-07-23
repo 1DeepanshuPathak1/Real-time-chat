@@ -20,16 +20,52 @@ function SignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
+    setIsLoading(true);
+    
     try {
+      console.log('Attempting to sign in with:', email);
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      navigate('/chat', { state: { user: userCredential.user } });
+      console.log('Sign in successful:', userCredential.user);
+      navigate('/chat');
     } catch (error) {
-      setErrorMessage(error.message);
+      console.error('Sign in error:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      
+      // More specific error messages
+      switch (error.code) {
+        case 'auth/user-not-found':
+          setErrorMessage('No account found with this email address.');
+          break;
+        case 'auth/wrong-password':
+          setErrorMessage('Incorrect password. Please try again.');
+          break;
+        case 'auth/invalid-email':
+          setErrorMessage('Invalid email address format.');
+          break;
+        case 'auth/user-disabled':
+          setErrorMessage('This account has been disabled.');
+          break;
+        case 'auth/too-many-requests':
+          setErrorMessage('Too many failed attempts. Please try again later.');
+          break;
+        case 'auth/network-request-failed':
+          setErrorMessage('Network error. Please check your connection.');
+          break;
+        case 'auth/invalid-credential':
+          setErrorMessage('Invalid email or password. Please check your credentials.');
+          break;
+        default:
+          setErrorMessage(`Sign in failed: ${error.message}`);
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -46,6 +82,7 @@ function SignIn() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            disabled={isLoading}
           />
           <input
             type="password"
@@ -54,8 +91,11 @@ function SignIn() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            disabled={isLoading}
           />
-          <button type="submit">Sign In</button>
+          <button type="submit" disabled={isLoading}>
+            {isLoading ? 'Signing In...' : 'Sign In'}
+          </button>
         </form>
         <p>
           Don't have an account? <a href="/signup">Sign Up</a>

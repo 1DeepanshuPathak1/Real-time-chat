@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import io from 'socket.io-client';
 import { initializeApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, query, onSnapshot, doc, setDoc, addDoc } from 'firebase/firestore';
 import { EmojiPickerComponent } from './components/EmojiPicker';
 import { ParticlesBackground } from './components/ParticlesBackground';
@@ -13,6 +14,7 @@ import { PollCreator } from './components/poll-creator';
 import { useCameraHandlers } from './components/CameraHandlers';
 import { useMessageHandlers } from './components/MessageHandlers';
 import './css/Chat.css';
+import { useNavigate } from 'react-router-dom';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -25,8 +27,9 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
 
-function Chat({ user }) {
+function Chat() {
   const [contacts, setContacts] = useState([]);
   const [selectedContact, setSelectedContact] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -37,67 +40,114 @@ function Chat({ user }) {
   const [showCamera, setShowCamera] = useState(false);
   const [showPollCreator, setShowPollCreator] = useState(false);
   const [isDark, setIsDark] = useState(true);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const documentInputRef = useRef(null);
   const videoRef = useRef(null);
   const socketRef = useRef(null);
+  const navigate = useNavigate();
 
-  const { startCamera, captureImage, stopCamera, stream } = useCameraHandlers(setMessages, videoRef);
-  const { handleSendMessage, handleFileUpload } = useMessageHandlers(setMessages, socketRef.current, selectedContact);
+  const { startCamera, captureImage, stopCamera, stream } = useCameraHandlers(setMessages, videoRef, selectedContact);
+  const { handleSendMessage, handleFileUpload } = useMessageHandlers(setMessages, socketRef.current, selectedContact, user);
 
+  // Handle authentication state
   useEffect(() => {
-    socketRef.current = io.connect('http://localhost:2000', { query: { userId: user.uid } });
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        console.log('User authenticated:', currentUser.email);
+        setUser(currentUser);
+      } else {
+        console.log('No user authenticated, redirecting to sign in');
+        navigate('/');
+      }
+      setLoading(false);
+    });
 
-    const fetchContacts = async () => {
+    return () => unsubscribe();
+  }, [navigate]);
+
+  // Initialize socket connection when user is authenticated
+  useEffect(() => {
+    if (user && !socketRef.current) {
+      console.log('Initializing socket connection for user:', user.uid);
+      socketRef.current = io.connect('http://localhost:3001', { 
+        query: { userId: user.uid } 
+      });
+
+      socketRef.current.on('connect', () => {
+        console.log('Socket connected:', socketRef.current.id);
+      });
+
+      socketRef.current.on('received-message', (data) => {
+        console.log('Received message:', data);
+        setMessages((prev) => [...prev, {
+          id: Date.now(),
+          sender: data.sender,
+          content: data.message,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          type: 'text'
+        }]);
+      });
+
+      socketRef.current.on('received-poll', (data) => {
+        console.log('Received poll:', data);
+        setMessages((prev) => [...prev, {
+          id: Date.now(),
+          sender: data.sender,
+          content: data.poll,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          type: 'poll'
+        }]);
+      });
+    }
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+      stopCamera();
+    };
+  }, [user, stopCamera]);
+
+  // Fetch contacts when user is authenticated
+  useEffect(() => {
+    if (user) {
+      console.log('Fetching contacts for user:', user.uid);
       const q = query(collection(db, 'users', user.uid, 'contacts'));
-      onSnapshot(q, (snapshot) => {
+      const unsubscribe = onSnapshot(q, (snapshot) => {
         const contactsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        console.log('Contacts loaded:', contactsData);
         setContacts(contactsData);
         if (contactsData.length > 0 && !selectedContact) {
           setSelectedContact(contactsData[0]);
         }
       });
-    };
 
-    fetchContacts();
+      return () => unsubscribe();
+    }
+  }, [user, selectedContact]);
 
-    socketRef.current.on('received-message', (data) => {
-      setMessages((prev) => [...prev, {
-        id: Date.now(),
-        sender: data.sender,
-        content: data.message,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        type: 'text'
-      }]);
-    });
-
-    socketRef.current.on('received-poll', (data) => {
-      setMessages((prev) => [...prev, {
-        id: Date.now(),
-        sender: data.sender,
-        content: data.poll,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        type: 'poll'
-      }]);
-    });
-
-    return () => {
-      socketRef.current.disconnect();
-      stopCamera();
-    };
-  }, [user.uid]);
-
+  // Handle room joining and message fetching when contact is selected
   useEffect(() => {
-    if (selectedContact) {
+    if (selectedContact && user && socketRef.current) {
+      console.log('Joining room:', selectedContact.roomID);
       socketRef.current.emit('join-room', selectedContact.roomID);
+      
       const q = query(collection(db, 'rooms', selectedContact.roomID, 'messages'));
-      onSnapshot(q, (snapshot) => {
-        const messagesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const messagesData = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .sort((a, b) => new Date(a.time) - new Date(b.time));
+        console.log('Messages loaded:', messagesData.length);
         setMessages(messagesData);
       });
+
+      return () => unsubscribe();
     }
-  }, [selectedContact]);
+  }, [selectedContact, user]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -106,26 +156,31 @@ function Chat({ user }) {
   useEffect(scrollToBottom, [messages]);
 
   const handleContactClick = (contact) => {
-    if (selectedContact) {
+    if (selectedContact && socketRef.current) {
       socketRef.current.emit('leave-room', selectedContact.roomID);
     }
     setSelectedContact(contact);
   };
 
   const handlePollSend = async (pollData) => {
-    if (selectedContact) {
+    if (selectedContact && user && socketRef.current) {
       const newPoll = {
         sender: user.email,
         content: pollData,
         time: new Date().toISOString(),
         type: 'poll'
       };
-      await addDoc(collection(db, 'rooms', selectedContact.roomID, 'messages'), newPoll);
-      socketRef.current.emit('send-poll', {
-        roomID: selectedContact.roomID,
-        poll: pollData,
-        sender: user.email
-      });
+      
+      try {
+        await addDoc(collection(db, 'rooms', selectedContact.roomID, 'messages'), newPoll);
+        socketRef.current.emit('send-poll', {
+          roomID: selectedContact.roomID,
+          poll: pollData,
+          sender: user.email
+        });
+      } catch (error) {
+        console.error('Error sending poll:', error);
+      }
     }
   };
 
@@ -138,6 +193,18 @@ function Chat({ user }) {
   const handleThemeChange = (newTheme) => {
     setIsDark(newTheme);
   };
+
+  if (loading) {
+    return (
+      <div className="loading-container">
+        <div>Loading...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className={`app-container ${isDark ? 'dark' : 'light'}`}>
@@ -160,7 +227,7 @@ function Chat({ user }) {
           {showCamera && (
             <CameraOverlay
               videoRef={videoRef}
-              onCapture={captureImage}
+              onCapture={() => captureImage(selectedContact)}
               onClose={() => {
                 stopCamera();
                 setShowCamera(false);
@@ -194,6 +261,7 @@ function Chat({ user }) {
               setShowCamera(true);
               setShowAttachMenu(false);
             }}
+            setShowPollCreator={setShowPollCreator}
           />
           <EmojiPickerComponent
             theme={isDark ? 'dark' : 'light'}

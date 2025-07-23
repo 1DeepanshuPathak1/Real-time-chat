@@ -4,7 +4,7 @@ import { createMessage } from '../services/messageServices';
 
 const db = getFirestore();
 
-export const useCameraHandlers = (setMessages, videoRef) => {
+export const useCameraHandlers = (setMessages, videoRef, selectedContact) => {
   const [stream, setStream] = useState(null);
 
   const startCamera = async () => {
@@ -26,8 +26,8 @@ export const useCameraHandlers = (setMessages, videoRef) => {
     }
   };
 
-  const captureImage = async (selectedContact) => {
-    if (videoRef.current) {
+  const captureImage = async () => {
+    if (videoRef.current && selectedContact) {
       const canvas = document.createElement('canvas');
       canvas.width = videoRef.current.videoWidth;
       canvas.height = videoRef.current.videoHeight;
