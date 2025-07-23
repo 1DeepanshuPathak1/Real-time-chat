@@ -7,9 +7,9 @@ export const ContactList = ({ contacts, selectedContact, onContactClick }) => {
         <h1>Chats</h1>
       </div>
       <div className="contact-list-scroll">
-        {Object.entries(contacts).map(([key, contact]) => (
+        {contacts.map((contact) => (
           <div
-            key={key}
+            key={contact.id}
             className={`contact-item ${selectedContact?.roomID === contact.roomID ? 'selected' : ''}`}
             onClick={() => onContactClick(contact)}
           >

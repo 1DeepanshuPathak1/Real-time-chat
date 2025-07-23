@@ -1,87 +1,69 @@
-import React, { useEffect, useState } from 'react';
-import Chat from './chat';
+import React, { useState } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { useNavigate } from 'react-router-dom';
 import './css/signin.css';
 
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+
 function SignIn() {
-    const [isLoggedIn, setIsLoggedIn] = useState(false);
-    const [email, setEmail] = useState('');
-    const [errorMessage, setErrorMessage] = useState('');
-    const [userData, setUserData] = useState(null);
-    const [contacts, setContacts] = useState({});
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const navigate = useNavigate();
 
-    const handleChange = (e) => {
-        setEmail(e.target.value);
-        setErrorMessage('');
-    };
-
-    useEffect(()=>{
-        console.log("updated contacts", Object.keys(contacts).length);
-    }, [contacts])
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setErrorMessage('');
-        
-        try {
-            const userResponse = await fetch(`http://localhost:2000/findUser/${email}`, {
-                method: 'GET'
-            });
-            
-            if (!userResponse.ok) {
-                const error = await userResponse.json();
-                throw new Error(error.error || 'Invalid user ID');
-            }
-            
-            const userData = await userResponse.json();
-            setUserData(userData);
-
-            const contactsResponse = await fetch(`http://localhost:2000/getContacts/${email}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-    
-            if (!contactsResponse.ok) {
-                throw new Error('Failed to load contacts');
-            }
-    
-            const contactsData = await contactsResponse.json();
-            setContacts(contactsData.contacts);
-            setIsLoggedIn(true);
-            
-        } catch (error) {
-            setErrorMessage(error.message);
-            setIsLoggedIn(false);
-            setUserData(null);
-            setContacts([]);
-        }
-    };
-
-    if (isLoggedIn && Object.keys(contacts).length>0) {
-        return <Chat email={email} contacts={contacts} />;
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setErrorMessage('');
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      navigate('/chat', { state: { user: userCredential.user } });
+    } catch (error) {
+      setErrorMessage(error.message);
     }
+  };
 
-    return (
-        <div className="signin-container">
-            <div className="background"></div>
-            <div className="form-container">
-                <h2>Sign In</h2>
-                <form onSubmit={handleSubmit}>
-                    <input
-                        type="email"
-                        name="email"
-                        placeholder="Enter User ID (format: user123)"
-                        value={email}
-                        onChange={handleChange}
-                        required
-                    />
-                    <button type="submit">Sign In</button>
-                </form>
-                {errorMessage && <div className="error-message">{errorMessage}</div>}
-            </div>
-        </div>
-    );
+  return (
+    <div className="signin-container">
+      <div className="background"></div>
+      <div className="form-container">
+        <h2>Sign In</h2>
+        <form onSubmit={handleSubmit}>
+          <input
+            type="email"
+            name="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+          <input
+            type="password"
+            name="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+          <button type="submit">Sign In</button>
+        </form>
+        <p>
+          Don't have an account? <a href="/signup">Sign Up</a>
+        </p>
+        {errorMessage && <div className="error-message">{errorMessage}</div>}
+      </div>
+    </div>
+  );
 }
 
 export default SignIn;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiSend, FiMic, FiSmile, FiPaperclip, FiImage, FiCamera, FiFile, FiUser } from 'react-icons/fi';
+import { FiSend, FiMic, FiSmile, FiPaperclip, FiImage, FiCamera, FiFile, FiBarChart2 } from 'react-icons/fi';
 
 export const MessageInput = ({
   onSubmit,
@@ -14,25 +14,34 @@ export const MessageInput = ({
   fileInputRef,
   documentInputRef,
   startCamera,
+  setShowPollCreator
 }) => {
   return (
     <form onSubmit={onSubmit} className="message-input-container">
       <button
         type="button"
         className="emoji-button"
-        onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setShowEmojiPicker(!showEmojiPicker);
+          setShowAttachMenu(false);
+        }}
       >
         <FiSmile />
       </button>
       <button
         type="button"
         className="attach-button"
-        onClick={() => setShowAttachMenu(!showAttachMenu)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setShowAttachMenu(!showAttachMenu);
+          setShowEmojiPicker(false);
+        }}
       >
         <FiPaperclip />
       </button>
       {showAttachMenu && (
-        <div className="attach-menu">
+        <div className="attach-menu" onClick={(e) => e.stopPropagation()}>
           <button onClick={() => fileInputRef.current?.click()}>
             <FiImage />
             <span>Photos & videos</span>
@@ -45,9 +54,12 @@ export const MessageInput = ({
             <FiFile />
             <span>Document</span>
           </button>
-          <button onClick={() => setShowAttachMenu(false)}>
-            <FiUser />
-            <span>Contact</span>
+          <button onClick={() => {
+            setShowAttachMenu(false);
+            setShowPollCreator(true);
+          }}>
+            <FiBarChart2 />
+            <span>Poll</span>
           </button>
         </div>
       )}

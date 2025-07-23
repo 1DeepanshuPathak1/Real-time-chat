@@ -7,7 +7,7 @@ export const ChatHeader = ({ selectedContact, onThemeChange }) => {
   const handleThemeChange = () => {
     const newTheme = !isDark;
     setIsDark(newTheme);
-    onThemeChange(newTheme); // Pass the new theme state to the parent component
+    onThemeChange(newTheme);
 
     const root = document.documentElement;
     if (newTheme) {
@@ -42,7 +42,7 @@ export const ChatHeader = ({ selectedContact, onThemeChange }) => {
         <span className={`theme-icon ${isDark ? 'dark' : 'light'}`}>
           {isDark ? <FaMoon size={18} /> : <FaSun size={18} />}
         </span>
-        <span className={`theme-text ${isDark ? 'dark' : 'light'}`}>{isDark ? "Dark" : "Light"} Mode</span>
+        <span className={`theme-text ${isDark ? 'dark' : 'light'}`}>{isDark ? 'Dark' : 'Light'} Mode</span>
       </button>
     </div>
   );

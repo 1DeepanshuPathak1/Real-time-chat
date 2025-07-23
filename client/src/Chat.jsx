@@ -1,221 +1,154 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import './css/chat.css';
-import { FiSend, FiMic, FiSmile, FiPaperclip, FiImage, FiCamera, FiFile, FiUser, FiBarChart2, FiEdit } from 'react-icons/fi';
+import React, { useState, useRef, useEffect } from 'react';
 import io from 'socket.io-client';
-// import { DrawingCanvas } from './components/drawing-canvas';
-// import { MediaCarousel } from './components/media-carousel';
+import { initializeApp } from 'firebase/app';
+import { getFirestore, collection, query, onSnapshot, doc, setDoc, addDoc } from 'firebase/firestore';
 import { EmojiPickerComponent } from './components/EmojiPicker';
 import { ParticlesBackground } from './components/ParticlesBackground';
 import { ContactList } from './components/Contactlist';
 import { ChatHeader } from './components/ChatHeader';
 import { MessageList } from './components/MessageList';
 import { CameraOverlay } from './components/CameraOverlay';
+import { MessageInput } from './components/MessageInput';
+import { PollCreator } from './components/poll-creator';
+import { useCameraHandlers } from './components/CameraHandlers';
+import { useMessageHandlers } from './components/MessageHandlers';
+import './css/Chat.css';
 
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+};
 
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-
-function Chat(props) {
-  const [contacts, setContacts] = useState({});
+function Chat({ user }) {
+  const [contacts, setContacts] = useState([]);
   const [selectedContact, setSelectedContact] = useState(null);
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isRecording, setIsRecording] = useState(false);
-  const messagesEndRef = useRef(null);
-  const [init, setInit] = useState(false);
-  const [socket, setSocket] = useState(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+  const [showPollCreator, setShowPollCreator] = useState(false);
+  const [isDark, setIsDark] = useState(true);
+  const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const documentInputRef = useRef(null);
-  const [showCamera, setShowCamera] = useState(false);
   const videoRef = useRef(null);
-  const [stream, setStream] = useState(null);
-  const [isDark, setIsDark] = useState(true);
-  // const [showDrawing, setShowDrawing] = useState(false);
+  const socketRef = useRef(null);
+
+  const { startCamera, captureImage, stopCamera, stream } = useCameraHandlers(setMessages, videoRef);
+  const { handleSendMessage, handleFileUpload } = useMessageHandlers(setMessages, socketRef.current, selectedContact);
 
   useEffect(() => {
-    const newSocket = io.connect("http://localhost:2000");
-    setSocket(newSocket);
-    setContacts(props.contacts);
-    if (props.contacts && Object.keys(props.contacts).length > 0) {
-      setSelectedContact(props.contacts[Object.keys(props.contacts)[0]]);
-    }
-    const handleClickOutside = (event) => {
-      const emojiPicker = document.querySelector('.emoji-picker-container');
-      const emojiButton = document.querySelector('.emoji-button');
-      const attachMenu = document.querySelector('.attach-menu');
-      const attachButton = document.querySelector('.attach-button');
-      const themeToggleButton = document.querySelector('.theme-toggle-button');
-      if (!emojiPicker?.contains(event.target) && !emojiButton?.contains(event.target) && !themeToggleButton?.contains(event.target)) {
-        setShowEmojiPicker(false);
-      }
-      
-      if (!attachMenu?.contains(event.target) && !attachButton?.contains(event.target)) {
-        setShowAttachMenu(false);
-      }
+    socketRef.current = io.connect('http://localhost:2000', { query: { userId: user.uid } });
+
+    const fetchContacts = async () => {
+      const q = query(collection(db, 'users', user.uid, 'contacts'));
+      onSnapshot(q, (snapshot) => {
+        const contactsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setContacts(contactsData);
+        if (contactsData.length > 0 && !selectedContact) {
+          setSelectedContact(contactsData[0]);
+        }
+      });
     };
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  }, [props.contacts], [showEmojiPicker, showAttachMenu]);
+
+    fetchContacts();
+
+    socketRef.current.on('received-message', (data) => {
+      setMessages((prev) => [...prev, {
+        id: Date.now(),
+        sender: data.sender,
+        content: data.message,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        type: 'text'
+      }]);
+    });
+
+    socketRef.current.on('received-poll', (data) => {
+      setMessages((prev) => [...prev, {
+        id: Date.now(),
+        sender: data.sender,
+        content: data.poll,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        type: 'poll'
+      }]);
+    });
+
+    return () => {
+      socketRef.current.disconnect();
+      stopCamera();
+    };
+  }, [user.uid]);
 
   useEffect(() => {
-    if (socket) {
-
-      socket.on("joined-room", (data) => {
-        console.log("joined room", data.roomID);
-        console.log("id : ", data.socketID);
-      })
-      socket.on("left-room", (data) => {
-        console.log("left room", data.roomID);
-        console.log("id : ", data.socketID);
-      })
-      socket.on("received-message", (data) => {
-        console.log("message from : ", data.socketID);
-        console.log("in room : ", data.roomID);
-      })
+    if (selectedContact) {
+      socketRef.current.emit('join-room', selectedContact.roomID);
+      const q = query(collection(db, 'rooms', selectedContact.roomID, 'messages'));
+      onSnapshot(q, (snapshot) => {
+        const messagesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setMessages(messagesData);
+      });
     }
-  }, [socket]);
+  }, [selectedContact]);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(scrollToBottom, [messages]);
 
-  const handleSendMessage = (e) => {
-    e.preventDefault();
-    if (inputMessage.trim() && selectedContact) {
-      const newMessage = {
-        id: messages.length + 1,
-        sender: 'You',
-        content: inputMessage.trim(),
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const handleContactClick = (contact) => {
+    if (selectedContact) {
+      socketRef.current.emit('leave-room', selectedContact.roomID);
+    }
+    setSelectedContact(contact);
+  };
+
+  const handlePollSend = async (pollData) => {
+    if (selectedContact) {
+      const newPoll = {
+        sender: user.email,
+        content: pollData,
+        time: new Date().toISOString(),
+        type: 'poll'
       };
-      setMessages([...messages, newMessage]);
-      setInputMessage('');
-
-      if (socket) {
-        socket.emit('send-message', {
-          roomId: selectedContact.roomID,
-          message: inputMessage.trim()
-        });
-      }
+      await addDoc(collection(db, 'rooms', selectedContact.roomID, 'messages'), newPoll);
+      socketRef.current.emit('send-poll', {
+        roomID: selectedContact.roomID,
+        poll: pollData,
+        sender: user.email
+      });
     }
   };
 
-  const onEmojiClick = (emojiObject) => {
-    setInputMessage(prevInput => prevInput + emojiObject.emoji);
-  }
-
-  const handleFileUpload = (event, type) => {
-    const file = event.target.files[0];
-    if (file) {
-      if (type === 'image' && file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const newMessage = {
-            id: messages.length + 1,
-            sender: 'You',
-            content: e.target.result,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            type: 'image'
-          };
-          setMessages([...messages, newMessage]);
-        };
-        reader.readAsDataURL(file);
-      } else if (type === 'document') {
-        const fileUrl = URL.createObjectURL(file);
-        const newMessage = {
-          id: messages.length + 1,
-          sender: 'You',
-          content: `📄 ${file.name}`,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          type: 'document',
-          fileName: file.name,
-          fileUrl: fileUrl
-        };
-        setMessages([...messages, newMessage]);
-      }
-    }
-    setShowAttachMenu(false);
-  };
   const handleDocumentClick = (fileUrl) => {
     if (fileUrl) {
       window.open(fileUrl, '_blank');
     }
   };
 
-  const startCamera = async () => {
-    try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 1280, height: 720 }
-      });
-      setStream(mediaStream);
-      setShowCamera(true);
-      setShowAttachMenu(false);
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = mediaStream;
-          videoRef.current.play().catch(console.error);
-        }
-      }, 100);
-    } catch (err) {
-      console.error("Error accessing camera:", err);
-    }
-  };
-
-  const captureImage = () => {
-    if (videoRef.current) {
-      const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
-      canvas.getContext('2d').drawImage(videoRef.current, 0, 0);
-      const imageData = canvas.toDataURL('image/jpeg');
-
-      const newMessage = {
-        id: messages.length + 1,
-        sender: 'You',
-        content: imageData,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        type: 'image'
-      };
-      setMessages([...messages, newMessage]);
-
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-      setShowCamera(false);
-      setShowAttachMenu(false);
-    }
-  };
-
   const handleThemeChange = (newTheme) => {
     setIsDark(newTheme);
   };
-  
-  // const handleDrawingSend = (imageData) => {
-  //   const newMessage = {
-  //     id: message.length + 1,
-  //     sender: 'You',
-  //     content: imageData,
-  //     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-  //     type: 'image'
-  //   };
-  //   setMessages([...messages, newMessage]);
-  // };
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${isDark ? 'dark' : 'light'}`}>
       <div className="chat-container">
         <ContactList
           contacts={contacts}
           selectedContact={selectedContact}
-          onContactClick={setSelectedContact}
+          onContactClick={handleContactClick}
         />
-
         <div className="chat-window">
-          <ChatHeader selectedContact={selectedContact} onThemeChange={handleThemeChange}  />
-
+          <ChatHeader selectedContact={selectedContact} onThemeChange={handleThemeChange} />
           <div className="messages-container">
             <ParticlesBackground />
             <MessageList
@@ -224,113 +157,64 @@ function Chat(props) {
               handleDocumentClick={handleDocumentClick}
             />
           </div>
-
           {showCamera && (
             <CameraOverlay
               videoRef={videoRef}
               onCapture={captureImage}
-              onClose={() => setShowCamera(false)}
+              onClose={() => {
+                stopCamera();
+                setShowCamera(false);
+              }}
               stream={stream}
             />
           )}
-          {/* {showDrawing && (
-            <DrawingCanvas
-              onClose={() => setShowDrawing(false)}
-              onSend={handleDrawingSend}
+          {showPollCreator && (
+            <PollCreator
+              onClose={() => setShowPollCreator(false)}
+              onSend={handlePollSend}
             />
-          )} */}
-
-
-          <form onSubmit={handleSendMessage} className="message-input-container">
-            <button
-              type="button"
-              className="emoji-button"
-              onClick={(e) => { 
-                e.stopPropagation(); 
-                setShowEmojiPicker((prev) => !prev); 
-                setShowAttachMenu(false); 
-              }}
-            >
-              <FiSmile />
-            </button>
-            <button
-              type="button"
-              className="attach-button"
-              onClick={(e) => { 
-                e.stopPropagation(); 
-                setShowAttachMenu((prev) => !prev); 
-                setShowEmojiPicker(false); 
-              }}
-            >
-              <FiPaperclip />
-            </button>
-            {showAttachMenu && (
-              <div className="attach-menu" onClick={(e) => e.stopPropagation()}>
-                <button onClick={() => fileInputRef.current?.click()}>
-                  <FiImage />
-                  <span>Photos & videos</span>
-                </button>
-                <button onClick={startCamera}>
-                  <FiCamera />
-                  <span>Camera</span>
-                </button>
-                <button onClick={() => documentInputRef.current?.click()}>
-                  <FiFile />
-                  <span>Document</span>
-                </button>
-                <button onClick={() => {
-                  setShowAttachMenu(false);
-                }}>
-                  <FiUser />
-                  <span>Contact</span>
-                </button>
-                {/* <button onClick={() => {
-                  setShowAttachMenu(false);
-                  setShowDrawing(true);
-                }}>
-                  <FiEdit />
-                  <span>Drawing</span>
-                </button> */}
-              </div>
-            )}
-            <EmojiPickerComponent 
-              theme= {isDark ? 'dark' : 'light'}
-              show={showEmojiPicker}
-              onEmojiClick={onEmojiClick}
-              onClick={(e) => e.stopPropagation()}
-            />
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={(e) => handleFileUpload(e, 'image')}
-              accept="image/*,video/*"
-              style={{ display: 'none' }}
-            />
-            <input
-              type="file"
-              ref={documentInputRef}
-              onChange={(e) => handleFileUpload(e, 'document')}
-              accept=".doc,.docx,.pdf,.txt,.xls,.xlsx"
-              style={{ display: 'none' }}
-            />
-            <input
-              type="text"
-              placeholder="Type a message"
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              className="message-input"
-            />
-            <button
-              type="button"
-              className={`mic-button ${isRecording ? 'recording' : ''}`}
-              onClick={() => setIsRecording(!isRecording)}
-            >
-              <FiMic />
-            </button>
-            <button type="submit" className="send-button">
-              <FiSend />
-            </button>
-          </form>
+          )}
+          <MessageInput
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSendMessage(inputMessage, setInputMessage);
+            }}
+            inputMessage={inputMessage}
+            setInputMessage={setInputMessage}
+            isRecording={isRecording}
+            setIsRecording={setIsRecording}
+            showEmojiPicker={showEmojiPicker}
+            setShowEmojiPicker={setShowEmojiPicker}
+            showAttachMenu={showAttachMenu}
+            setShowAttachMenu={setShowAttachMenu}
+            fileInputRef={fileInputRef}
+            documentInputRef={documentInputRef}
+            startCamera={() => {
+              startCamera();
+              setShowCamera(true);
+              setShowAttachMenu(false);
+            }}
+          />
+          <EmojiPickerComponent
+            theme={isDark ? 'dark' : 'light'}
+            show={showEmojiPicker}
+            onEmojiClick={(emojiObject) => setInputMessage(prev => prev + emojiObject.emoji)}
+            onClick={(e) => e.stopPropagation()}
+          />
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={(e) => handleFileUpload(e.target.files[0], 'image')}
+            accept="image/*,video/*"
+            style={{ display: 'none' }}
+          />
+          <input
+            type="file"
+            ref={documentInputRef}
+            onChange={(e) => handleFileUpload(e.target.files[0], 'document')}
+            accept=".doc,.docx,.pdf,.txt,.xls,.xlsx"
+            style={{ display: 'none' }}
+          />
         </div>
       </div>
     </div>

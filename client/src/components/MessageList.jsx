@@ -20,6 +20,16 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick }) =
                 <FiFile className="document-icon" />
                 <span>{message.fileName}</span>
               </div>
+            ) : message.type === 'poll' ? (
+              <div className="poll-message">
+                <h4>{message.content.question}</h4>
+                <ul>
+                  {message.content.options.map((option, index) => (
+                    <li key={index}>{option}</li>
+                  ))}
+                </ul>
+                <p>{message.content.allowMultiple ? 'Multiple choice' : 'Single choice'}</p>
+              </div>
             ) : (
               <p>{message.content}</p>
             )}

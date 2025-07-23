@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
+import { getFirestore, collection, addDoc } from 'firebase/firestore';
 import { createMessage } from '../services/messageServices';
+
+const db = getFirestore();
 
 export const useCameraHandlers = (setMessages, videoRef) => {
   const [stream, setStream] = useState(null);
@@ -23,7 +26,7 @@ export const useCameraHandlers = (setMessages, videoRef) => {
     }
   };
 
-  const captureImage = () => {
+  const captureImage = async (selectedContact) => {
     if (videoRef.current) {
       const canvas = document.createElement('canvas');
       canvas.width = videoRef.current.videoWidth;
@@ -32,6 +35,10 @@ export const useCameraHandlers = (setMessages, videoRef) => {
       const imageData = canvas.toDataURL('image/jpeg');
 
       const newMessage = createMessage(imageData, 'image');
+      await addDoc(collection(db, 'rooms', selectedContact.roomID, 'messages'), {
+        ...newMessage,
+        sender: selectedContact.email
+      });
       setMessages(prev => [...prev, newMessage]);
 
       if (stream) {
