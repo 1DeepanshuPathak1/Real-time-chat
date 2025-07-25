@@ -8,6 +8,7 @@ import { ParticlesBackground } from './components/ParticlesBackground';
 import { ContactList } from './components/Contactlist';
 import { ChatHeader } from './components/ChatHeader';
 import { MessageList } from './components/MessageList';
+import { EmptyChat } from './components/EmptyChat';
 import { CameraOverlay } from './components/CameraOverlay';
 import { MessageInput } from './components/MessageInput';
 import { PollCreator } from './components/poll-creator';
@@ -121,14 +122,11 @@ function Chat() {
         const contactsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         console.log('Contacts loaded:', contactsData);
         setContacts(contactsData);
-        if (contactsData.length > 0 && !selectedContact) {
-          setSelectedContact(contactsData[0]);
-        }
       });
 
       return () => unsubscribe();
     }
-  }, [user, selectedContact]);
+  }, [user]);
 
   // Handle room joining and message fetching when contact is selected
   useEffect(() => {
@@ -213,76 +211,86 @@ function Chat() {
           contacts={contacts}
           selectedContact={selectedContact}
           onContactClick={handleContactClick}
+          user={user}
         />
         <div className="chat-window">
-          <ChatHeader selectedContact={selectedContact} onThemeChange={handleThemeChange} />
-          <div className="messages-container">
-            <ParticlesBackground />
-            <MessageList
-              messages={messages}
-              messagesEndRef={messagesEndRef}
-              handleDocumentClick={handleDocumentClick}
-            />
-          </div>
-          {showCamera && (
-            <CameraOverlay
-              videoRef={videoRef}
-              onCapture={() => captureImage(selectedContact)}
-              onClose={() => {
-                stopCamera();
-                setShowCamera(false);
-              }}
-              stream={stream}
-            />
+          {selectedContact ? (
+            <>
+              <ChatHeader selectedContact={selectedContact} onThemeChange={handleThemeChange} />
+              <div className="messages-container">
+                <ParticlesBackground />
+                <MessageList
+                  messages={messages}
+                  messagesEndRef={messagesEndRef}
+                  handleDocumentClick={handleDocumentClick}
+                />
+              </div>
+              {showCamera && (
+                <CameraOverlay
+                  videoRef={videoRef}
+                  onCapture={() => captureImage(selectedContact)}
+                  onClose={() => {
+                    stopCamera();
+                    setShowCamera(false);
+                  }}
+                  stream={stream}
+                />
+              )}
+              {showPollCreator && (
+                <PollCreator
+                  onClose={() => setShowPollCreator(false)}
+                  onSend={handlePollSend}
+                />
+              )}
+              <MessageInput
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendMessage(inputMessage, setInputMessage);
+                }}
+                inputMessage={inputMessage}
+                setInputMessage={setInputMessage}
+                isRecording={isRecording}
+                setIsRecording={setIsRecording}
+                showEmojiPicker={showEmojiPicker}
+                setShowEmojiPicker={setShowEmojiPicker}
+                showAttachMenu={showAttachMenu}
+                setShowAttachMenu={setShowAttachMenu}
+                fileInputRef={fileInputRef}
+                documentInputRef={documentInputRef}
+                startCamera={() => {
+                  startCamera();
+                  setShowCamera(true);
+                  setShowAttachMenu(false);
+                }}
+                setShowPollCreator={setShowPollCreator}
+              />
+              <EmojiPickerComponent
+                theme={isDark ? 'dark' : 'light'}
+                show={showEmojiPicker}
+                onEmojiClick={(emojiObject) => setInputMessage(prev => prev + emojiObject.emoji)}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={(e) => handleFileUpload(e.target.files[0], 'image')}
+                accept="image/*,video/*"
+                style={{ display: 'none' }}
+              />
+              <input
+                type="file"
+                ref={documentInputRef}
+                onChange={(e) => handleFileUpload(e.target.files[0], 'document')}
+                accept=".doc,.docx,.pdf,.txt,.xls,.xlsx"
+                style={{ display: 'none' }}
+              />
+            </>
+          ) : (
+            <div className="messages-container">
+              <ParticlesBackground />
+              <EmptyChat />
+            </div>
           )}
-          {showPollCreator && (
-            <PollCreator
-              onClose={() => setShowPollCreator(false)}
-              onSend={handlePollSend}
-            />
-          )}
-          <MessageInput
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSendMessage(inputMessage, setInputMessage);
-            }}
-            inputMessage={inputMessage}
-            setInputMessage={setInputMessage}
-            isRecording={isRecording}
-            setIsRecording={setIsRecording}
-            showEmojiPicker={showEmojiPicker}
-            setShowEmojiPicker={setShowEmojiPicker}
-            showAttachMenu={showAttachMenu}
-            setShowAttachMenu={setShowAttachMenu}
-            fileInputRef={fileInputRef}
-            documentInputRef={documentInputRef}
-            startCamera={() => {
-              startCamera();
-              setShowCamera(true);
-              setShowAttachMenu(false);
-            }}
-            setShowPollCreator={setShowPollCreator}
-          />
-          <EmojiPickerComponent
-            theme={isDark ? 'dark' : 'light'}
-            show={showEmojiPicker}
-            onEmojiClick={(emojiObject) => setInputMessage(prev => prev + emojiObject.emoji)}
-            onClick={(e) => e.stopPropagation()}
-          />
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={(e) => handleFileUpload(e.target.files[0], 'image')}
-            accept="image/*,video/*"
-            style={{ display: 'none' }}
-          />
-          <input
-            type="file"
-            ref={documentInputRef}
-            onChange={(e) => handleFileUpload(e.target.files[0], 'document')}
-            accept=".doc,.docx,.pdf,.txt,.xls,.xlsx"
-            style={{ display: 'none' }}
-          />
         </div>
       </div>
     </div>

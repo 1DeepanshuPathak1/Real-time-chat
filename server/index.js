@@ -6,7 +6,6 @@ const cors = require('cors');
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 
-// Debug environment variables
 console.log('Environment Variables:', {
   FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
   FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL,
@@ -19,15 +18,12 @@ if (!process.env.FIREBASE_PRIVATE_KEY) {
   process.exit(1);
 }
 
-// Fix the private key parsing
 let privateKey = process.env.FIREBASE_PRIVATE_KEY;
 
-// Remove quotes if they exist
 if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
   privateKey = privateKey.slice(1, -1);
 }
 
-// Replace escaped newlines with actual newlines
 privateKey = privateKey.replace(/\\n/g, '\n');
 
 const serviceAccount = {
@@ -61,6 +57,36 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+const generateUserCode = () => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
+
+const ensureUserCode = async (userId) => {
+  const userRef = db.collection('users').doc(userId);
+  const userDoc = await userRef.get();
+  
+  if (userDoc.exists && !userDoc.data().userCode) {
+    let userCode;
+    let codeExists = true;
+    
+    while (codeExists) {
+      userCode = generateUserCode();
+      const existingUser = await db.collection('users').where('userCode', '==', userCode).get();
+      codeExists = !existingUser.empty;
+    }
+    
+    await userRef.update({ userCode });
+    return userCode;
+  }
+  
+  return userDoc.data()?.userCode;
+};
 
 app.get('/checkup', (req, res) => {
   res.send('Server is working');
@@ -110,8 +136,161 @@ app.post('/create-room', async (req, res) => {
   }
 });
 
+app.post('/send-friend-request', async (req, res) => {
+  const { senderId, recipientIdentifier } = req.body;
+  
+  try {
+    if (!senderId || !recipientIdentifier) {
+      return res.status(400).send('Missing senderId or recipientIdentifier');
+    }
+
+    await ensureUserCode(senderId);
+    
+    const senderDoc = await db.collection('users').doc(senderId).get();
+    if (!senderDoc.exists) {
+      return res.status(404).send('Sender not found');
+    }
+
+    let recipientDoc;
+    if (recipientIdentifier.includes('@')) {
+      const recipientQuery = await db.collection('users').where('email', '==', recipientIdentifier).get();
+      if (recipientQuery.empty) {
+        return res.status(404).send('User not found with this email');
+      }
+      recipientDoc = recipientQuery.docs[0];
+    } else {
+      const recipientQuery = await db.collection('users').where('userCode', '==', recipientIdentifier.toUpperCase()).get();
+      if (recipientQuery.empty) {
+        return res.status(404).send('User not found with this code');
+      }
+      recipientDoc = recipientQuery.docs[0];
+    }
+
+    const recipientId = recipientDoc.id;
+    const recipientData = recipientDoc.data();
+
+    if (senderId === recipientId) {
+      return res.status(400).send('Cannot send friend request to yourself');
+    }
+
+    const existingContact = await db.collection('users').doc(senderId).collection('contacts').doc(recipientId).get();
+    if (existingContact.exists) {
+      return res.status(400).send('User is already in your contacts');
+    }
+
+    const existingRequest = await db.collection('users').doc(recipientId).collection('friendRequests').doc(senderId).get();
+    if (existingRequest.exists) {
+      return res.status(400).send('Friend request already sent');
+    }
+
+    const reverseRequest = await db.collection('users').doc(senderId).collection('friendRequests').doc(recipientId).get();
+    if (reverseRequest.exists) {
+      return res.status(400).send('This user has already sent you a friend request');
+    }
+
+    await db.collection('users').doc(recipientId).collection('friendRequests').doc(senderId).set({
+      senderId: senderId,
+      senderName: senderDoc.data().name,
+      senderEmail: senderDoc.data().email,
+      timestamp: new Date().toISOString(),
+      status: 'pending'
+    });
+
+    io.to(recipientId).emit('friend-request-received', {
+      senderId: senderId,
+      senderName: senderDoc.data().name,
+      senderEmail: senderDoc.data().email,
+      timestamp: new Date().toISOString()
+    });
+
+    res.status(200).send('Friend request sent successfully');
+  } catch (error) {
+    console.error('Error sending friend request:', error);
+    res.status(500).send('Server error');
+  }
+});
+
+app.post('/respond-friend-request', async (req, res) => {
+  const { userId, senderId, response } = req.body;
+  
+  try {
+    if (!userId || !senderId || !['accept', 'reject'].includes(response)) {
+      return res.status(400).send('Invalid request parameters');
+    }
+
+    const requestDoc = await db.collection('users').doc(userId).collection('friendRequests').doc(senderId).get();
+    if (!requestDoc.exists) {
+      return res.status(404).send('Friend request not found');
+    }
+
+    if (response === 'accept') {
+      const userDoc = await db.collection('users').doc(userId).get();
+      const senderDoc = await db.collection('users').doc(senderId).get();
+      
+      const roomId = [userId, senderId].sort().join('-');
+
+      await db.collection('rooms').doc(roomId).set({
+        participants: [userId, senderId],
+        createdAt: new Date().toISOString()
+      });
+
+      await db.collection('users').doc(userId).collection('contacts').doc(senderId).set({
+        name: senderDoc.data().name,
+        email: senderDoc.data().email,
+        roomID: roomId,
+        unreadCount: 0
+      });
+
+      await db.collection('users').doc(senderId).collection('contacts').doc(userId).set({
+        name: userDoc.data().name,
+        email: userDoc.data().email,
+        roomID: roomId,
+        unreadCount: 0
+      });
+
+      io.to(senderId).emit('friend-request-accepted', {
+        userId: userId,
+        userName: userDoc.data().name,
+        userEmail: userDoc.data().email,
+        roomId: roomId
+      });
+    }
+
+    await db.collection('users').doc(userId).collection('friendRequests').doc(senderId).delete();
+
+    io.to(senderId).emit('friend-request-responded', {
+      userId: userId,
+      response: response
+    });
+
+    res.status(200).send(`Friend request ${response}ed successfully`);
+  } catch (error) {
+    console.error('Error responding to friend request:', error);
+    res.status(500).send('Server error');
+  }
+});
+
+app.get('/friend-requests/:userId', async (req, res) => {
+  const { userId } = req.params;
+  
+  try {
+    const requestsSnapshot = await db.collection('users').doc(userId).collection('friendRequests').get();
+    const requests = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    res.status(200).send(requests);
+  } catch (error) {
+    console.error('Error fetching friend requests:', error);
+    res.status(500).send('Server error');
+  }
+});
+
 io.on('connection', (socket) => {
   console.log('Socket connection established with id', socket.id);
+
+  socket.on('user-connected', (userId) => {
+    socket.join(userId);
+    console.log(`User ${userId} connected with socket ${socket.id}`);
+  });
 
   socket.on('send-message', async (data) => {
     const { roomID, message, sender } = data;
@@ -160,10 +339,4 @@ io.on('connection', (socket) => {
       console.error('Error leaving room:', error);
     }
   });
-});
-
-const PORT = process.env.PORT || 3001;
-
-server.listen(PORT, () => {
-  console.log(`Server started on http://localhost:${PORT}`);
 });
