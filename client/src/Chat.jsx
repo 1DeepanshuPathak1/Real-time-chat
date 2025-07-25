@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import io from 'socket.io-client';
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, query, onSnapshot, doc, setDoc, addDoc } from 'firebase/firestore';
+import { getFirestore, collection, query, onSnapshot, addDoc } from 'firebase/firestore';
+import { SocketProvider, useSocket } from './services/SocketService';
 import { EmojiPickerComponent } from './components/EmojiPicker';
 import { ParticlesBackground } from './components/ParticlesBackground';
 import { ContactList } from './components/Contactlist';
@@ -30,7 +30,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-function Chat() {
+function ChatContent() {
   const [contacts, setContacts] = useState([]);
   const [selectedContact, setSelectedContact] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -43,18 +43,27 @@ function Chat() {
   const [isDark, setIsDark] = useState(true);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [networkError, setNetworkError] = useState(false);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const documentInputRef = useRef(null);
   const videoRef = useRef(null);
-  const socketRef = useRef(null);
   const navigate = useNavigate();
 
-  const { startCamera, captureImage, stopCamera, stream } = useCameraHandlers(setMessages, videoRef, selectedContact);
-  const { handleSendMessage, handleFileUpload } = useMessageHandlers(setMessages, socketRef.current, selectedContact, user);
+  const { 
+    socket, 
+    isConnected, 
+    networkError, 
+    joinRoom, 
+    leaveRoom, 
+    sendMessage, 
+    sendPoll,
+    onMessageReceived,
+    onPollReceived
+  } = useSocket();
 
-  // Handle authentication state
+  const { startCamera, captureImage, stopCamera, stream } = useCameraHandlers(setMessages, videoRef, selectedContact);
+  const { handleSendMessage, handleFileUpload } = useMessageHandlers(setMessages, socket, selectedContact, user);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
@@ -70,73 +79,6 @@ function Chat() {
     return () => unsubscribe();
   }, [navigate]);
 
-  // Initialize socket connection when user is authenticated
-  useEffect(() => {
-    if (user && !socketRef.current) {
-      console.log('Initializing socket connection for user:', user.uid);
-      socketRef.current = io('https://chat-app-server-uwpx.onrender.com', {
-        transports: ['websocket', 'polling'],
-        path: '/socket.io',
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
-        timeout: 10000,
-        auth: {
-          token: user.uid
-        }
-      });
-
-      socketRef.current.on('connect', () => {
-        console.log('Socket connected:', socketRef.current.id);
-        setNetworkError(false);
-        socketRef.current.emit('user-connected', user.uid);
-      });
-
-      socketRef.current.on('connect_error', (error) => {
-        console.error('Socket connection error:', error);
-        setNetworkError(true);
-      });
-
-      socketRef.current.on('error', (error) => {
-        console.error('Socket error:', error);
-      });
-
-      socketRef.current.on('reconnect_attempt', (attempt) => {
-        console.log('Attempting to reconnect:', attempt);
-      });
-
-      socketRef.current.on('received-message', (data) => {
-        console.log('Received message:', data);
-        setMessages((prev) => [...prev, {
-          id: Date.now(),
-          sender: data.sender,
-          content: data.message,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          type: 'text'
-        }]);
-      });
-
-      socketRef.current.on('received-poll', (data) => {
-        console.log('Received poll:', data);
-        setMessages((prev) => [...prev, {
-          id: Date.now(),
-          sender: data.sender,
-          content: data.poll,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          type: 'poll'
-        }]);
-      });
-    }
-
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
-      stopCamera();
-    };
-  }, [user, stopCamera]);
-
-  // Fetch contacts when user is authenticated
   useEffect(() => {
     if (user) {
       console.log('Fetching contacts for user:', user.uid);
@@ -151,11 +93,10 @@ function Chat() {
     }
   }, [user]);
 
-  // Handle room joining and message fetching when contact is selected
   useEffect(() => {
-    if (selectedContact && user && socketRef.current) {
+    if (selectedContact && user && isConnected) {
       console.log('Joining room:', selectedContact.roomID);
-      socketRef.current.emit('join-room', selectedContact.roomID);
+      joinRoom(selectedContact.roomID);
 
       const q = query(collection(db, 'rooms', selectedContact.roomID, 'messages'));
       const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -168,7 +109,36 @@ function Chat() {
 
       return () => unsubscribe();
     }
-  }, [selectedContact, user]);
+  }, [selectedContact, user, isConnected, joinRoom]);
+
+  useEffect(() => {
+    const unsubscribeMessage = onMessageReceived((data) => {
+      console.log('Received message:', data);
+      setMessages((prev) => [...prev, {
+        id: Date.now(),
+        sender: data.sender,
+        content: data.message,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        type: 'text'
+      }]);
+    });
+
+    const unsubscribePoll = onPollReceived((data) => {
+      console.log('Received poll:', data);
+      setMessages((prev) => [...prev, {
+        id: Date.now(),
+        sender: data.sender,
+        content: data.poll,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        type: 'poll'
+      }]);
+    });
+
+    return () => {
+      if (unsubscribeMessage) unsubscribeMessage();
+      if (unsubscribePoll) unsubscribePoll();
+    };
+  }, [onMessageReceived, onPollReceived]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -177,14 +147,14 @@ function Chat() {
   useEffect(scrollToBottom, [messages]);
 
   const handleContactClick = (contact) => {
-    if (selectedContact && socketRef.current) {
-      socketRef.current.emit('leave-room', selectedContact.roomID);
+    if (selectedContact && isConnected) {
+      leaveRoom(selectedContact.roomID);
     }
     setSelectedContact(contact);
   };
 
   const handlePollSend = async (pollData) => {
-    if (selectedContact && user && socketRef.current) {
+    if (selectedContact && user && isConnected) {
       const newPoll = {
         sender: user.email,
         content: pollData,
@@ -194,11 +164,7 @@ function Chat() {
 
       try {
         await addDoc(collection(db, 'rooms', selectedContact.roomID, 'messages'), newPoll);
-        socketRef.current.emit('send-poll', {
-          roomID: selectedContact.roomID,
-          poll: pollData,
-          sender: user.email
-        });
+        sendPoll(selectedContact.roomID, pollData, user.email);
       } catch (error) {
         console.error('Error sending poll:', error);
       }
@@ -235,7 +201,6 @@ function Chat() {
           selectedContact={selectedContact}
           onContactClick={handleContactClick}
           user={user}
-          socket={socketRef.current}
         />
         <div className="chat-window">
           {selectedContact ? (
@@ -323,6 +288,43 @@ function Chat() {
         </div>
       )}
     </div>
+  );
+}
+
+function Chat() {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+      } else {
+        navigate('/');
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [navigate]);
+
+  if (loading) {
+    return (
+      <div className="loading-container">
+        <div>Loading...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  return (
+    <SocketProvider user={user}>
+      <ChatContent />
+    </SocketProvider>
   );
 }
 

@@ -1,65 +1,69 @@
 import React, { useState, useEffect } from 'react';
 import { UserPlus, Check, X, Users, Bell } from 'lucide-react';
+import { getFirestore, collection, query, onSnapshot } from 'firebase/firestore';
+import { useSocket } from '../services/SocketService';
 import { API_ENDPOINTS } from '../config/api';
 import './css/FriendRequestHandler.css';
 
-export const FriendRequestHandler = ({ user, socket }) => {
+export const FriendRequestHandler = ({ user }) => {
   const [friendRequests, setFriendRequests] = useState([]);
   const [showRequests, setShowRequests] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const db = getFirestore();
+  const { onFriendRequestReceived, onFriendRequestResponded, onFriendRequestAccepted } = useSocket();
+
   useEffect(() => {
     if (user) {
-      fetchFriendRequests();
+      const q = query(collection(db, 'users', user.uid, 'friendRequests'));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const requestsData = snapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          senderId: doc.id,
+          ...doc.data() 
+        }));
+        setFriendRequests(requestsData);
+      }, (error) => {
+        console.error('Firestore listener error:', error);
+      });
+
+      return () => unsubscribe();
     }
-  }, [user]);
+  }, [user, db]);
 
   useEffect(() => {
-    if (socket && user) {
-      socket.emit('user-connected', user.uid);
-      
-      const handleFriendRequestReceived = (data) => {
-        setFriendRequests(prev => {
-          const existingRequest = prev.find(req => req.senderId === data.senderId);
-          if (!existingRequest) {
-            return [...prev, data];
-          }
-          return prev;
-        });
-      };
-
-      const handleFriendRequestResponded = (data) => {
-        if (data.response === 'reject') {
-          setFriendRequests(prev => prev.filter(req => req.senderId !== data.userId));
+    const unsubscribeReceived = onFriendRequestReceived((data) => {
+      setFriendRequests(prev => {
+        const exists = prev.some(req => req.senderId === data.senderId);
+        if (!exists) {
+          return [...prev, {
+            id: data.senderId,
+            senderId: data.senderId,
+            senderName: data.senderName,
+            senderEmail: data.senderEmail,
+            timestamp: data.timestamp
+          }];
         }
-      };
+        return prev;
+      });
+    });
 
-      socket.on('friend-request-received', handleFriendRequestReceived);
-      socket.on('friend-request-responded', handleFriendRequestResponded);
-
-      return () => {
-        socket.off('friend-request-received', handleFriendRequestReceived);
-        socket.off('friend-request-responded', handleFriendRequestResponded);
-      };
-    }
-  }, [socket, user]);
-
-  const fetchFriendRequests = async () => {
-    if (!user) return;
-    
-    try {
-      setLoading(true);
-      const response = await fetch(API_ENDPOINTS.FRIEND_REQUESTS(user.uid));
-      if (response.ok) {
-        const requests = await response.json();
-        setFriendRequests(requests);
+    const unsubscribeResponded = onFriendRequestResponded((data) => {
+      if (data.response === 'reject') {
+        setFriendRequests(prev => prev.filter(req => req.senderId !== data.userId));
       }
-    } catch (error) {
-      console.error('Error fetching friend requests:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    });
+
+    const unsubscribeAccepted = onFriendRequestAccepted((data) => {
+      setFriendRequests(prev => prev.filter(req => req.senderId !== data.senderId));
+    });
+
+    return () => {
+      unsubscribeReceived();
+      unsubscribeResponded();
+      unsubscribeAccepted();
+    };
+  }, [onFriendRequestReceived, onFriendRequestResponded, onFriendRequestAccepted]);
 
   const sendFriendRequest = async (recipientIdentifier) => {
     if (!user || !recipientIdentifier.trim()) return { success: false, message: 'Please enter a valid email or code' };
@@ -78,14 +82,10 @@ export const FriendRequestHandler = ({ user, socket }) => {
       });
 
       const responseData = await response.json();
-
-      if (response.ok) {
-        return { success: true, message: 'Friend request sent successfully!' };
-      } else {
-        return { success: false, message: responseData.error || 'Failed to send friend request' };
-      }
+      return response.ok 
+        ? { success: true, message: 'Friend request sent successfully!' }
+        : { success: false, message: responseData.error || 'Failed to send friend request' };
     } catch (error) {
-      console.error('Error sending friend request:', error);
       return { success: false, message: 'Network error. Please try again.' };
     } finally {
       setLoading(false);
@@ -131,10 +131,7 @@ export const FriendRequestHandler = ({ user, socket }) => {
         <div className="friend-requests-modal">
           <div className="friend-requests-header">
             <h3>Friend Requests</h3>
-            <button 
-              className="close-requests"
-              onClick={() => setShowRequests(false)}
-            >
+            <button className="close-requests" onClick={() => setShowRequests(false)}>
               <X size={20} />
             </button>
           </div>

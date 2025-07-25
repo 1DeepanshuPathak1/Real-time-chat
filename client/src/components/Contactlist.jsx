@@ -4,7 +4,7 @@ import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { FriendRequestHandler } from './FriendRequestHandler';
 import './css/ContactList.css';
 
-export const ContactList = ({ contacts, selectedContact, onContactClick, user, socket }) => {
+export const ContactList = ({ contacts, selectedContact, onContactClick, user }) => {
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [friendEmail, setFriendEmail] = useState('');
   const [copied, setCopied] = useState(false);
@@ -13,7 +13,6 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, s
 
   const db = getFirestore();
 
-  // Fetch the actual user code from Firestore
   useEffect(() => {
     const fetchUserCode = async () => {
       if (user?.uid) {
@@ -40,7 +39,7 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, s
     loading,
     FriendRequestsModal,
     FriendRequestBadge
-  } = FriendRequestHandler({ user, socket });
+  } = FriendRequestHandler({ user });
 
   const handleAddFriend = async (e) => {
     e.preventDefault();
