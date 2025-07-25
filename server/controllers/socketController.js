@@ -57,6 +57,10 @@ class SocketController {
             });
         });
     }
+
+    emitToUser(userId, event, data) {
+        this.io.to(userId).emit(event, data);
+    }
 }
 
 module.exports = SocketController;

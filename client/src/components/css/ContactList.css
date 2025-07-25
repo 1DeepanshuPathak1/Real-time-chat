@@ -1,82 +1,137 @@
 .contact-list {
   width: 30%;
   max-width: 400px;
-  background-color: var(--bg-color);
+  background: linear-gradient(135deg, var(--bg-color), #1a1a1a);
   border-right: 2px solid var(--border-color);
   display: flex;
   flex-direction: column;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
 }
 
 .contact-list-header {
   padding: 20px;
-  background-color: var(--secondary-bg);
+  background: linear-gradient(135deg, var(--secondary-bg), #2a2a2a);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  backdrop-filter: blur(10px);
 }
 
 .contact-list-header h1 {
   font-size: 24px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--accent-color);
+  text-shadow: 0 2px 4px rgba(18, 140, 126, 0.3);
 }
 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .user-code {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  background-color: var(--bg-color);
-  border-radius: 15px;
+  gap: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, var(--bg-color), #2a2a2a);
+  border-radius: 20px;
   font-size: 12px;
   color: var(--text-color);
+  border: 1px solid rgba(18, 140, 126, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  font-weight: 500;
 }
 
 .copy-button {
-  background: none;
-  border: none;
+  background: linear-gradient(135deg, transparent, rgba(18, 140, 126, 0.1));
+  border: 1px solid rgba(18, 140, 126, 0.3);
   color: var(--accent-color);
   cursor: pointer;
-  padding: 2px;
-  border-radius: 3px;
-  transition: all 0.2s ease;
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.3s ease;
 }
 
 .copy-button:hover {
-  background-color: rgba(18, 140, 126, 0.2);
+  background: linear-gradient(135deg, rgba(18, 140, 126, 0.2), rgba(18, 140, 126, 0.3));
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(18, 140, 126, 0.2);
 }
 
-.add-friend-button {
-  background-color: var(--accent-color);
+.friend-requests-button {
+  background: linear-gradient(135deg, #ff6b35, #e55a2b);
   border: none;
   color: white;
   border-radius: 50%;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.3s ease;
+  position: relative;
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+}
+
+.friend-requests-button:hover {
+  background: linear-gradient(135deg, #e55a2b, #d14d23);
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 6px 16px rgba(255, 107, 53, 0.4);
+}
+
+.add-friend-button {
+  background: linear-gradient(135deg, var(--accent-color), #0d6b5c);
+  border: none;
+  color: white;
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(18, 140, 126, 0.3);
 }
 
 .add-friend-button:hover {
-  background-color: #0d6b5c;
-  transform: scale(1.1);
+  background: linear-gradient(135deg, #0d6b5c, #0a5347);
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 6px 16px rgba(18, 140, 126, 0.4);
+}
+
+.status-message {
+  padding: 12px 20px;
+  margin: 0 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  animation: slideDown 0.3s ease-out;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.status-message.success {
+  background: linear-gradient(135deg, #25D366, #20b558);
+  color: white;
+  border: 1px solid rgba(37, 211, 102, 0.3);
+}
+
+.status-message.error {
+  background: linear-gradient(135deg, #dc3545, #c82333);
+  color: white;
+  border: 1px solid rgba(220, 53, 69, 0.3);
 }
 
 .add-friend-modal {
-  padding: 15px 20px;
-  background-color: var(--secondary-bg);
+  padding: 20px;
+  background: linear-gradient(135deg, var(--secondary-bg), #2a2a2a);
   border-bottom: 1px solid var(--border-color);
   animation: slideDown 0.3s ease-out;
+  backdrop-filter: blur(10px);
 }
 
 @keyframes slideDown {
@@ -92,89 +147,129 @@
 
 .friend-input {
   width: 100%;
-  padding: 10px;
+  padding: 12px 16px;
   border: 1px solid var(--border-color);
-  border-radius: 20px;
-  background-color: var(--bg-color);
+  border-radius: 25px;
+  background: linear-gradient(135deg, var(--bg-color), #2a2a2a);
   color: var(--text-color);
   font-size: 14px;
-  margin-bottom: 10px;
+  margin-bottom: 15px;
+  transition: all 0.3s ease;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .friend-input:focus {
   outline: none;
   border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(18, 140, 126, 0.1), inset 0 2px 4px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
 }
 
 .modal-buttons {
   display: flex;
-  gap: 10px;
+  gap: 12px;
 }
 
 .send-request-button {
   flex: 1;
-  padding: 8px 15px;
-  background-color: var(--accent-color);
+  padding: 12px 20px;
+  background: linear-gradient(135deg, var(--accent-color), #0d6b5c);
   border: none;
-  border-radius: 15px;
+  border-radius: 20px;
   color: white;
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(18, 140, 126, 0.3);
 }
 
 .send-request-button:hover {
-  background-color: #0d6b5c;
+  background: linear-gradient(135deg, #0d6b5c, #0a5347);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(18, 140, 126, 0.4);
 }
 
 .cancel-button {
   flex: 1;
-  padding: 8px 15px;
-  background-color: #666;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #666, #555);
   border: none;
-  border-radius: 15px;
+  border-radius: 20px;
   color: white;
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(102, 102, 102, 0.3);
 }
 
 .cancel-button:hover {
-  background-color: #555;
+  background: linear-gradient(135deg, #555, #444);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(102, 102, 102, 0.4);
 }
 
 .contact-list-scroll {
   flex-grow: 1;
   overflow-y: auto;
+  padding: 10px 0;
+}
+
+.contact-list-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.contact-list-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.contact-list-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, var(--accent-color), #0d6b5c);
+  border-radius: 3px;
 }
 
 .contact-item {
   display: flex;
   align-items: center;
-  padding: 15px 20px;
+  padding: 16px 20px;
   cursor: pointer;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-  margin: 10px 15px;
-  border-radius: 12px;
-  background-color: var(--bg-color);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  margin: 8px 15px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--bg-color), #2a2a2a);
   transition: all 0.3s ease;
   position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(5px);
 }
 
 .contact-item:hover {
-  background-color: #2c2c2c;
+  background: linear-gradient(135deg, #2c2c2c, #363636);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  border-color: rgba(18, 140, 126, 0.3);
 }
 
 .contact-item.selected {
-  background-color: #2c2c2c;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, #2c2c2c, #363636);
+  box-shadow: 0 8px 24px rgba(18, 140, 126, 0.2);
+  border-color: var(--accent-color);
+  transform: translateY(-1px);
 }
 
 .contact-avatar {
-  width: 50px;
-  height: 50px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
-  margin-right: 15px;
+  margin-right: 16px;
+  border: 2px solid rgba(18, 140, 126, 0.3);
+  transition: all 0.3s ease;
+}
+
+.contact-item:hover .contact-avatar {
+  border-color: var(--accent-color);
+  box-shadow: 0 4px 12px rgba(18, 140, 126, 0.3);
 }
 
 .contact-info {
@@ -191,6 +286,7 @@
   font-size: 16px;
   font-weight: 600;
   color: var(--text-color);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .contact-name-time span {
@@ -203,14 +299,16 @@
   right: 15px;
   top: 50%;
   transform: translateY(-50%);
-  background-color: #25D366;
+  background: linear-gradient(135deg, #25D366, #20b558);
   color: white;
   font-size: 12px;
   font-weight: bold;
-  padding: 2px 8px;
+  padding: 4px 8px;
   border-radius: 12px;
-  min-width: 20px;
+  min-width: 24px;
   text-align: center;
+  box-shadow: 0 2px 8px rgba(37, 211, 102, 0.3);
+  animation: pulse 2s infinite;
 }
 
 .no-contacts {
@@ -224,12 +322,13 @@
 }
 
 .no-contacts-animation {
-  margin-bottom: 20px;
+  margin-bottom: 30px;
 }
 
 .floating-icons {
   color: var(--accent-color);
   animation: float 3s ease-in-out infinite;
+  filter: drop-shadow(0 4px 8px rgba(18, 140, 126, 0.3));
 }
 
 @keyframes float {
@@ -243,53 +342,50 @@
 
 .no-contacts h3 {
   color: var(--text-color);
-  font-size: 20px;
-  margin-bottom: 10px;
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 15px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .no-contacts p {
   color: #667781;
   font-size: 14px;
-  line-height: 1.5;
-  margin-bottom: 20px;
+  line-height: 1.6;
+  margin-bottom: 30px;
+  max-width: 280px;
 }
 
 .add-first-friend {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  background-color: var(--accent-color);
+  gap: 10px;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, var(--accent-color), #0d6b5c);
   border: none;
-  border-radius: 25px;
+  border-radius: 30px;
   color: white;
   font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
+  box-shadow: 0 6px 16px rgba(18, 140, 126, 0.3);
 }
 
 .add-first-friend:hover {
-  background-color: #0d6b5c;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(18, 140, 126, 0.3);
+  background: linear-gradient(135deg, #0d6b5c, #0a5347);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(18, 140, 126, 0.4);
 }
 
-.friend-requests-button {
-  background-color: #ff6b35;
-  border: none;
-  color: white;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  position: relative;
-}
-
-.friend-requests-button:hover {
-  background-color: #e55a2b;
-  transform: scale(1.1);
+@keyframes pulse {
+  0% {
+    box-shadow: 0 2px 8px rgba(37, 211, 102, 0.3);
+  }
+  50% {
+    box-shadow: 0 2px 16px rgba(37, 211, 102, 0.5);
+  }
+  100% {
+    box-shadow: 0 2px 8px rgba(37, 211, 102, 0.3);
+  }
 }

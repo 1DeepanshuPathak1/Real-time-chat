@@ -21,14 +21,14 @@ const roomModel = new RoomModel(db);
 // Configure server and get instances
 const { app, server, io } = configureServer();
 
+// Initialize socket controller for real-time chat functionality
+const socketController = new SocketController(io, roomModel);
+
 // Initialize controllers
 const healthController = new HealthController();
 const roomController = new RoomController(db, userModel, roomModel);
 const friendRequestController = new FriendRequestController(db, io, userModel, roomModel);
 const authController = new AuthController(db, userModel);
-
-// Initialize socket controller for real-time chat functionality
-const socketController = new SocketController(io, roomModel);
 
 // Basic security middleware
 app.disable('x-powered-by');

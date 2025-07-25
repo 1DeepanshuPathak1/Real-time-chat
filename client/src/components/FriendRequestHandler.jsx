@@ -11,27 +11,38 @@ export const FriendRequestHandler = ({ user, socket }) => {
   useEffect(() => {
     if (user) {
       fetchFriendRequests();
-      
-      if (socket) {
-        socket.emit('user-connected', user.uid);
-        
-        socket.on('friend-request-received', (data) => {
-          setFriendRequests(prev => [...prev, data]);
-        });
-
-        socket.on('friend-request-responded', (data) => {
-          if (data.response === 'reject') {
-            setFriendRequests(prev => prev.filter(req => req.senderId !== data.userId));
-          }
-        });
-
-        return () => {
-          socket.off('friend-request-received');
-          socket.off('friend-request-responded');
-        };
-      }
     }
-  }, [user, socket]);
+  }, [user]);
+
+  useEffect(() => {
+    if (socket && user) {
+      socket.emit('user-connected', user.uid);
+      
+      const handleFriendRequestReceived = (data) => {
+        setFriendRequests(prev => {
+          const existingRequest = prev.find(req => req.senderId === data.senderId);
+          if (!existingRequest) {
+            return [...prev, data];
+          }
+          return prev;
+        });
+      };
+
+      const handleFriendRequestResponded = (data) => {
+        if (data.response === 'reject') {
+          setFriendRequests(prev => prev.filter(req => req.senderId !== data.userId));
+        }
+      };
+
+      socket.on('friend-request-received', handleFriendRequestReceived);
+      socket.on('friend-request-responded', handleFriendRequestResponded);
+
+      return () => {
+        socket.off('friend-request-received', handleFriendRequestReceived);
+        socket.off('friend-request-responded', handleFriendRequestResponded);
+      };
+    }
+  }, [socket, user]);
 
   const fetchFriendRequests = async () => {
     if (!user) return;

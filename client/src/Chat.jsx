@@ -75,7 +75,7 @@ function Chat() {
     if (user && !socketRef.current) {
       console.log('Initializing socket connection for user:', user.uid);
       socketRef.current = io('https://chat-app-server-uwpx.onrender.com', {
-        transports: ['websocket', 'polling'],  // Add polling as fallback
+        transports: ['websocket', 'polling'],
         path: '/socket.io',
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
@@ -88,6 +88,7 @@ function Chat() {
       socketRef.current.on('connect', () => {
         console.log('Socket connected:', socketRef.current.id);
         setNetworkError(false);
+        socketRef.current.emit('user-connected', user.uid);
       });
 
       socketRef.current.on('connect_error', (error) => {
