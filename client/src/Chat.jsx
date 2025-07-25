@@ -43,6 +43,7 @@ function Chat() {
   const [isDark, setIsDark] = useState(true);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [networkError, setNetworkError] = useState(false);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const documentInputRef = useRef(null);
@@ -73,12 +74,33 @@ function Chat() {
   useEffect(() => {
     if (user && !socketRef.current) {
       console.log('Initializing socket connection for user:', user.uid);
-      socketRef.current = io.connect('https://potential-couscous-gvqx4q97w55fvx5w-3001.app.github.dev', {
-        query: { userId: user.uid }
+      socketRef.current = io('https://chat-app-server-uwpx.onrender.com', {
+        transports: ['websocket', 'polling'],  // Add polling as fallback
+        path: '/socket.io',
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        timeout: 10000,
+        auth: {
+          token: user.uid
+        }
       });
 
       socketRef.current.on('connect', () => {
         console.log('Socket connected:', socketRef.current.id);
+        setNetworkError(false);
+      });
+
+      socketRef.current.on('connect_error', (error) => {
+        console.error('Socket connection error:', error);
+        setNetworkError(true);
+      });
+
+      socketRef.current.on('error', (error) => {
+        console.error('Socket error:', error);
+      });
+
+      socketRef.current.on('reconnect_attempt', (attempt) => {
+        console.log('Attempting to reconnect:', attempt);
       });
 
       socketRef.current.on('received-message', (data) => {
@@ -294,6 +316,11 @@ function Chat() {
           )}
         </div>
       </div>
+      {networkError && (
+        <div className="network-error-banner">
+          Connection lost. Attempting to reconnect...
+        </div>
+      )}
     </div>
   );
 }

@@ -1,3 +1,11 @@
+const validateRequest = (req, res, next) => {
+  const { senderId, recipientIdentifier } = req.body;
+  if (!senderId || !recipientIdentifier) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+  next();
+};
+
 class FriendRequestController {
     constructor(db, io, userModel, roomModel) {
         this.db = db;

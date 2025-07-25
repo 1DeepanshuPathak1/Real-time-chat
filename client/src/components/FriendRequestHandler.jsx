@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { UserPlus, Check, X, Users, Bell } from 'lucide-react';
 import './css/FriendRequestHandler.css';
 
+const API_BASE_URL = 'https://chat-app-server-uwpx.onrender.com/api';
+
 export const FriendRequestHandler = ({ user, socket }) => {
   const [friendRequests, setFriendRequests] = useState([]);
   const [showRequests, setShowRequests] = useState(false);
@@ -32,12 +34,31 @@ export const FriendRequestHandler = ({ user, socket }) => {
     }
   }, [user, socket]);
 
+  const fetchWithTimeout = async (url, options = {}, timeout = 5000) => {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal
+      });
+      clearTimeout(id);
+      return response;
+    } catch (error) {
+      clearTimeout(id);
+      throw error;
+    }
+  };
+
   const fetchFriendRequests = async () => {
     if (!user) return;
     
     try {
       setLoading(true);
-      const response = await fetch(`https://potential-couscous-gvqx4q97w55fvx5w-3001.app.github.dev/friend-requests/${user.uid}`);
+      const response = await fetchWithTimeout(
+        `${API_BASE_URL}/friend-requests/${user.uid}`  // Updated path
+      );
       if (response.ok) {
         const requests = await response.json();
         setFriendRequests(requests);
@@ -54,10 +75,11 @@ export const FriendRequestHandler = ({ user, socket }) => {
 
     try {
       setLoading(true);
-      const response = await fetch('https://potential-couscous-gvqx4q97w55fvx5w-3001.app.github.dev/send-friend-request', {
+      const response = await fetch(`${API_BASE_URL}/send-friend-request`, { // Updated path
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.uid}`
         },
         body: JSON.stringify({
           senderId: user.uid,
@@ -65,15 +87,15 @@ export const FriendRequestHandler = ({ user, socket }) => {
         }),
       });
 
-      if (response.ok) {
-        return { success: true, message: 'Friend request sent successfully!' };
-      } else {
-        const errorMessage = await response.text();
-        return { success: false, message: errorMessage };
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to send friend request');
       }
+
+      return { success: true, message: 'Friend request sent successfully!' };
     } catch (error) {
       console.error('Error sending friend request:', error);
-      return { success: false, message: 'Failed to send friend request' };
+      return { success: false, message: error.message };
     } finally {
       setLoading(false);
     }
@@ -84,7 +106,7 @@ export const FriendRequestHandler = ({ user, socket }) => {
 
     try {
       setLoading(true);
-      const res = await fetch('https://potential-couscous-gvqx4q97w55fvx5w-3001.app.github.dev/respond-friend-request', {
+      const res = await fetch(`${API_BASE_URL}/respond-friend-request`, { // Updated path
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
