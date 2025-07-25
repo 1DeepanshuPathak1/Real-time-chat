@@ -47,8 +47,8 @@ class UserModel {
                 codeExists = !existingUser.empty;
             }
 
-            // Add new user with generated code
-            await this.db.collection(this.collection).add({
+            // Create user document with uid as document ID
+            await this.db.collection(this.collection).doc(userDetails.uid).set({
                 name: userDetails.name,
                 email: userDetails.email,
                 userCode: userCode,

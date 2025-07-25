@@ -10,7 +10,7 @@ module.exports = (healthController, roomController, friendRequestController, aut
     router.post('/api/create-user', authController.createUser.bind(authController));
 
     // Room routes
-    router.post('/create-room', roomController.createRoom.bind(roomController));
+    router.post('/api/create-room', roomController.createRoom.bind(roomController));
 
     // Friend request routes
     router.post('/api/send-friend-request', friendRequestController.sendFriendRequest.bind(friendRequestController));

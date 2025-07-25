@@ -5,18 +5,33 @@ class AuthController {
     }
 
     async verifyUser(req, res) {
+        const { email } = req.body;
+        
         try {
-            const { email } = req.body;
             if (!email) {
                 return res.status(400).json({ error: 'Email is required' });
             }
 
-            const user = await this.userModel.findUserByEmail(email);
-            if (!user) {
+            const result = await this.userModel.fetchUser(email);
+            
+            if (result.message === 'User not found') {
                 return res.status(404).json({ error: 'User not found' });
             }
 
-            res.status(200).json({ message: 'User exists' });
+            if (result.message === 'success') {
+                // Ensure user has a user code
+                const userCode = await this.userModel.ensureUserCode(result.userData.id);
+                
+                return res.status(200).json({ 
+                    message: 'User found',
+                    userData: {
+                        ...result.userData,
+                        userCode: userCode
+                    }
+                });
+            }
+
+            return res.status(500).json({ error: result.message });
         } catch (error) {
             console.error('Error verifying user:', error);
             res.status(500).json({ error: 'Server error' });
@@ -24,32 +39,28 @@ class AuthController {
     }
 
     async createUser(req, res) {
+        const { uid, name, email } = req.body;
+        
         try {
-            const { uid, name, email } = req.body;
             if (!uid || !name || !email) {
                 return res.status(400).json({ error: 'Missing required fields' });
             }
 
-            // Check if user exists in our database
-            const existingUser = await this.userModel.findUserByEmail(email);
-            if (existingUser) {
-                // If user exists in our database but has a different UID, something's wrong
-                if (existingUser.id !== uid) {
-                    return res.status(409).json({ error: 'Email already registered with a different account' });
-                }
-                // If same UID, this might be a retry of a failed operation, allow it
-                return res.status(200).json({ message: 'User already exists', user: existingUser });
-            }
-
-            // Create user document with generated user code
-            await this.db.collection('users').doc(uid).set({
-                name,
-                email,
-                userCode: await this.userModel.generateUserCode(),
-                createdAt: new Date().toISOString()
+            const result = await this.userModel.addNewUser({
+                uid: uid,
+                name: name,
+                email: email
             });
 
-            res.status(201).json({ message: 'User created successfully' });
+            if (result.message === 'success') {
+                return res.status(201).json({ message: 'User created successfully' });
+            }
+
+            if (result.code === 'auth/email-already-exists') {
+                return res.status(409).json({ error: 'User already exists' });
+            }
+
+            return res.status(500).json({ error: result.message });
         } catch (error) {
             console.error('Error creating user:', error);
             res.status(500).json({ error: 'Server error' });

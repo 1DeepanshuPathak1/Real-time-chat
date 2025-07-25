@@ -38,7 +38,7 @@ export const FriendRequestHandler = ({ user, socket }) => {
     
     try {
       setLoading(true);
-            const response = await fetch(API_ENDPOINTS.FRIEND_REQUESTS(user.uid));
+      const response = await fetch(API_ENDPOINTS.FRIEND_REQUESTS(user.uid));
       if (response.ok) {
         const requests = await response.json();
         setFriendRequests(requests);
@@ -51,7 +51,7 @@ export const FriendRequestHandler = ({ user, socket }) => {
   };
 
   const sendFriendRequest = async (recipientIdentifier) => {
-    if (!user || !recipientIdentifier.trim()) return;
+    if (!user || !recipientIdentifier.trim()) return { success: false, message: 'Please enter a valid email or code' };
 
     try {
       setLoading(true);
@@ -66,15 +66,16 @@ export const FriendRequestHandler = ({ user, socket }) => {
         }),
       });
 
+      const responseData = await response.json();
+
       if (response.ok) {
         return { success: true, message: 'Friend request sent successfully!' };
       } else {
-        const errorMessage = await response.text();
-        return { success: false, message: errorMessage };
+        return { success: false, message: responseData.error || 'Failed to send friend request' };
       }
     } catch (error) {
       console.error('Error sending friend request:', error);
-      return { success: false, message: 'Failed to send friend request' };
+      return { success: false, message: 'Network error. Please try again.' };
     } finally {
       setLoading(false);
     }

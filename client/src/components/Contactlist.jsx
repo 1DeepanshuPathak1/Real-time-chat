@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserPlus, Copy, Check, Users, Bell } from 'lucide-react';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { FriendRequestHandler } from './FriendRequestHandler';
 import './css/ContactList.css';
 
@@ -8,8 +9,29 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, s
   const [friendEmail, setFriendEmail] = useState('');
   const [copied, setCopied] = useState(false);
   const [requestStatus, setRequestStatus] = useState({ message: '', type: '' });
+  const [userCode, setUserCode] = useState('LOADING...');
 
-  const userCode = user?.uid?.slice(-6).toUpperCase() || 'USER123';
+  const db = getFirestore();
+
+  // Fetch the actual user code from Firestore
+  useEffect(() => {
+    const fetchUserCode = async () => {
+      if (user?.uid) {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            setUserCode(userData.userCode || 'NO CODE');
+          }
+        } catch (error) {
+          console.error('Error fetching user code:', error);
+          setUserCode('ERROR');
+        }
+      }
+    };
+
+    fetchUserCode();
+  }, [user, db]);
 
   const {
     showRequests,
