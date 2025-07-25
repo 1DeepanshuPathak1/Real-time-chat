@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
+import { API_ENDPOINTS } from './config/api';
 import './css/signin.css';
 
 const firebaseConfig = {
@@ -27,12 +28,31 @@ function SignUp() {
     confirmPassword: ''
   });
   const [errorMessage, setErrorMessage] = useState('');
-  const [showMessage, setShowMessage] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const createUserInDb = async (userData) => {
+    try {
+      const response = await fetch(API_ENDPOINTS.CREATE_USER, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create user');
+      }
+
+      return await response.json();
+    } catch (error) {
+      throw error;
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -47,35 +67,16 @@ function SignUp() {
     }
 
     try {
-      console.log('Creating user with email:', formData.email);
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
-      console.log('User created successfully:', userCredential.user);
       
-      // Save user data to Firestore
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
+      await createUserInDb({
+        uid: userCredential.user.uid,
         name: `${formData.firstName} ${formData.lastName}`,
-        email: formData.email,
-        createdAt: new Date().toISOString()
+        email: formData.email
       });
-      console.log('User data saved to Firestore');
-      
-      // Send email verification
-      try {
-        await sendEmailVerification(userCredential.user);
-        console.log('Verification email sent');
-        setShowMessage(true);
-        setTimeout(() => navigate('/'), 3000);
-      } catch (emailError) {
-        console.warn('Could not send verification email:', emailError);
-        // Still proceed with account creation
-        setShowMessage(true);
-        setTimeout(() => navigate('/'), 2000);
-      }
-      
+
+      navigate('/');
     } catch (error) {
-      console.error('Sign up error:', error);
-      console.error('Error code:', error.code);
-      
       switch (error.code) {
         case 'auth/email-already-in-use':
           setErrorMessage('An account with this email already exists.');
@@ -86,11 +87,8 @@ function SignUp() {
         case 'auth/weak-password':
           setErrorMessage('Password should be at least 6 characters long.');
           break;
-        case 'auth/network-request-failed':
-          setErrorMessage('Network error. Please check your connection.');
-          break;
         default:
-          setErrorMessage(`Sign up failed: ${error.message}`);
+          setErrorMessage('Failed to create account. Please try again.');
       }
     } finally {
       setIsLoading(false);
@@ -98,69 +96,73 @@ function SignUp() {
   };
 
   return (
-    <div className="signin-container">
-      <div className="background"></div>
-      <div className="form-container">
-        <h2>Sign Up</h2>
+    <div className="auth-container">
+      <div className="auth-card">
+        <h2>Create Account</h2>
         <form onSubmit={handleSubmit}>
-          <input
-            type="text"
-            name="firstName"
-            placeholder="First Name"
-            value={formData.firstName}
-            onChange={handleChange}
-            required
-            disabled={isLoading}
-          />
-          <input
-            type="text"
-            name="lastName"
-            placeholder="Last Name"
-            value={formData.lastName}
-            onChange={handleChange}
-            required
-            disabled={isLoading}
-          />
-          <input
-            type="email"
-            name="email"
-            placeholder="Email"
-            value={formData.email}
-            onChange={handleChange}
-            required
-            disabled={isLoading}
-          />
-          <input
-            type="password"
-            name="password"
-            placeholder="Password (min 6 characters)"
-            value={formData.password}
-            onChange={handleChange}
-            required
-            disabled={isLoading}
-          />
-          <input
-            type="password"
-            name="confirmPassword"
-            placeholder="Confirm Password"
-            value={formData.confirmPassword}
-            onChange={handleChange}
-            required
-            disabled={isLoading}
-          />
-          <button type="submit" disabled={isLoading}>
+          <div className="input-group">
+            <input
+              type="text"
+              name="firstName"
+              placeholder="First Name"
+              value={formData.firstName}
+              onChange={handleChange}
+              required
+              disabled={isLoading}
+            />
+          </div>
+          <div className="input-group">
+            <input
+              type="text"
+              name="lastName"
+              placeholder="Last Name"
+              value={formData.lastName}
+              onChange={handleChange}
+              required
+              disabled={isLoading}
+            />
+          </div>
+          <div className="input-group">
+            <input
+              type="email"
+              name="email"
+              placeholder="Email"
+              value={formData.email}
+              onChange={handleChange}
+              required
+              disabled={isLoading}
+            />
+          </div>
+          <div className="input-group">
+            <input
+              type="password"
+              name="password"
+              placeholder="Password (min 6 characters)"
+              value={formData.password}
+              onChange={handleChange}
+              required
+              disabled={isLoading}
+            />
+          </div>
+          <div className="input-group">
+            <input
+              type="password"
+              name="confirmPassword"
+              placeholder="Confirm Password"
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              required
+              disabled={isLoading}
+            />
+          </div>
+          <button type="submit" className="auth-button" disabled={isLoading}>
             {isLoading ? 'Creating Account...' : 'Sign Up'}
           </button>
         </form>
-        <p>
+        <p className="auth-switch">
           Already have an account? <a href="/">Sign In</a>
         </p>
-        {errorMessage && <div className="error-message">{errorMessage}</div>}
-        {showMessage && (
-          <div className="success-message">
-            Account created successfully! A verification email has been sent. Redirecting to Sign In...
-          </div>
-        )}
+        {errorMessage && <div className="auth-error">{errorMessage}</div>}
       </div>
     </div>
   );

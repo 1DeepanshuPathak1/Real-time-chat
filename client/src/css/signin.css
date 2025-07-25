@@ -1,5 +1,10 @@
 :root {
   --accent-color: #128C7E;
+  --bg-gradient: linear-gradient(135deg, #040404, #1a1a1a);
+  --primary-color: #007bff;
+  --primary-color-dark: #0056b3;
+  --text-primary: #ffffff;
+  --text-secondary: #cccccc;
 }
 
 * {
@@ -14,97 +19,78 @@ body {
   min-height: 100vh;
 }
 
-.signin-container {
+.auth-container {
+  height: 100vh;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
-  background: #000000;
+  background: var(--bg-gradient);
 }
 
-.background {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100vh;
-  background: linear-gradient(135deg, #040404, #1a1a1a);
-  filter: blur(2.5px);
-  z-index: -1;
-}
-
-.form-container {
-  width: 400px;
-  padding: 30px;
-  background: #212020;
+.auth-card {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  padding: 2rem;
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  transition: box-shadow 0.5s ease;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
 }
 
-.form-container:hover {
-  box-shadow: 0 8px 24px rgba(0, 255, 0, 0.3);
-}
-
-h2 {
+.auth-card h2 {
+  color: var(--text-primary);
+  margin-bottom: 1.5rem;
   text-align: center;
-  margin-bottom: 24px;
-  color: #ffffff;
-  font-size: 24px;
-  font-weight: 600;
 }
 
-.signin-container input {
+.input-group {
+  margin-bottom: 1rem;
+}
+
+.input-group input {
   width: 100%;
-  height: 45px;
-  margin-bottom: 20px;
-  padding: 0 15px;
-  color: #ffffff;
-  background-color: #121212;
-  border: 2px solid #4c4c4c;
+  padding: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
-  font-size: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  font-size: 1rem;
 }
 
-.signin-container input:focus {
-  outline: none;
-  border-color: var(--accent-color);
-  box-shadow: 0 0 0 2px var(--accent-color);
-}
-
-.signin-container button {
+.auth-button {
   width: 100%;
-  height: 50px;
-  background-color: var(--accent-color);
-  color: white;
-  font-size: 16px;
-  font-weight: 600;
+  padding: 0.75rem;
   border: none;
   border-radius: 8px;
+  background: var(--primary-color);
+  color: white;
+  font-size: 1rem;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: background 0.3s ease;
 }
 
-.signin-container button:hover {
-  background-color: #0c6b5e;
-  box-shadow: 0 4px 12px rgba(0, 255, 0, 0.3);
+.auth-button:hover {
+  background: var(--primary-color-dark);
 }
 
-.signin-container p {
+.auth-switch {
+  margin-top: 1rem;
   text-align: center;
-  margin-top: 20px;
-  color: #ffffff;
+  color: var(--text-secondary);
 }
 
-.signin-container p a {
-  color: var(--accent-color);
+.auth-switch a {
+  color: var(--primary-color);
   text-decoration: none;
-  font-weight: 600;
 }
 
-.signin-container p a:hover {
-  text-decoration: underline;
+.auth-error {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: rgba(255, 0, 0, 0.1);
+  color: #ff4444;
+  text-align: center;
 }
 
 .success-message {

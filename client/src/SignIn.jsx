@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
+import { API_ENDPOINTS } from './config/api';
 import './css/signin.css';
 
 const firebaseConfig = {
@@ -23,23 +24,38 @@ function SignIn() {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
+  const verifyUser = async (email) => {
+    try {
+      const response = await fetch(API_ENDPOINTS.VERIFY_USER, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      if (!response.ok) {
+        throw new Error('User not found');
+      }
+
+      return await response.json();
+    } catch (error) {
+      throw error;
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
     setIsLoading(true);
     
     try {
-      console.log('Attempting to sign in with:', email);
+      await verifyUser(email);
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log('Sign in successful:', userCredential.user);
       navigate('/chat');
     } catch (error) {
-      console.error('Sign in error:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
-      
-      // More specific error messages
-      switch (error.code) {
+      switch (error.code || error.message) {
+        case 'User not found':
         case 'auth/user-not-found':
           setErrorMessage('No account found with this email address.');
           break;
@@ -55,14 +71,8 @@ function SignIn() {
         case 'auth/too-many-requests':
           setErrorMessage('Too many failed attempts. Please try again later.');
           break;
-        case 'auth/network-request-failed':
-          setErrorMessage('Network error. Please check your connection.');
-          break;
-        case 'auth/invalid-credential':
-          setErrorMessage('Invalid email or password. Please check your credentials.');
-          break;
         default:
-          setErrorMessage(`Sign in failed: ${error.message}`);
+          setErrorMessage('Invalid email or password.');
       }
     } finally {
       setIsLoading(false);
@@ -70,37 +80,40 @@ function SignIn() {
   };
 
   return (
-    <div className="signin-container">
-      <div className="background"></div>
-      <div className="form-container">
-        <h2>Sign In</h2>
+    <div className="auth-container">
+      <div className="auth-card">
+        <h2>Welcome Back</h2>
         <form onSubmit={handleSubmit}>
-          <input
-            type="email"
-            name="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            disabled={isLoading}
-          />
-          <input
-            type="password"
-            name="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            disabled={isLoading}
-          />
-          <button type="submit" disabled={isLoading}>
+          <div className="input-group">
+            <input
+              type="email"
+              name="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              disabled={isLoading}
+            />
+          </div>
+          <div className="input-group">
+            <input
+              type="password"
+              name="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              disabled={isLoading}
+            />
+          </div>
+          <button type="submit" className="auth-button" disabled={isLoading}>
             {isLoading ? 'Signing In...' : 'Sign In'}
           </button>
         </form>
-        <p>
+        <p className="auth-switch">
           Don't have an account? <a href="/signup">Sign Up</a>
         </p>
-        {errorMessage && <div className="error-message">{errorMessage}</div>}
+        {errorMessage && <div className="auth-error">{errorMessage}</div>}
       </div>
     </div>
   );
