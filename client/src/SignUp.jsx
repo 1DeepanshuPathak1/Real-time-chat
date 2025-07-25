@@ -67,19 +67,30 @@ function SignUp() {
     }
 
     try {
+      // First create Firebase auth user
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       
-      await createUserInDb({
-        uid: userCredential.user.uid,
-        name: `${formData.firstName} ${formData.lastName}`,
-        email: formData.email
-      });
-
-      navigate('/');
+      try {
+        // Then create user in our database
+        await createUserInDb({
+          uid: userCredential.user.uid,
+          name: `${formData.firstName} ${formData.lastName}`,
+          email: formData.email
+        });
+        
+        // If successful, redirect to sign in
+        setErrorMessage('Account created successfully! Please sign in.');
+        setTimeout(() => navigate('/'), 2000);
+      } catch (dbError) {
+        // If database creation fails, delete the Firebase auth user
+        await userCredential.user.delete();
+        throw new Error('Failed to create user profile. Please try again.');
+      }
     } catch (error) {
+      console.error('Signup error:', error);
       switch (error.code) {
         case 'auth/email-already-in-use':
-          setErrorMessage('An account with this email already exists.');
+          setErrorMessage('An account with this email already exists. Please sign in.');
           break;
         case 'auth/invalid-email':
           setErrorMessage('Invalid email address format.');
@@ -87,8 +98,11 @@ function SignUp() {
         case 'auth/weak-password':
           setErrorMessage('Password should be at least 6 characters long.');
           break;
+        case 'auth/operation-not-allowed':
+          setErrorMessage('Email/password accounts are not enabled. Please contact support.');
+          break;
         default:
-          setErrorMessage('Failed to create account. Please try again.');
+          setErrorMessage(error.message || 'Failed to create account. Please try again.');
       }
     } finally {
       setIsLoading(false);

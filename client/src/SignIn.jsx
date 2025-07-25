@@ -50,15 +50,28 @@ function SignIn() {
     setIsLoading(true);
     
     try {
-      await verifyUser(email);
+      // First verify if user exists in our database
+      try {
+        await verifyUser(email);
+      } catch (error) {
+        if (error.message === 'User not found') {
+          setErrorMessage('No account found with this email address. Please sign up.');
+          setIsLoading(false);
+          return;
+        }
+        throw error;
+      }
+
+      // If user exists, try to sign in
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      if (!userCredential.user.emailVerified) {
+        // Optional: You can still let them sign in but show a warning
+        console.warn('Email not verified');
+      }
       navigate('/chat');
     } catch (error) {
-      switch (error.code || error.message) {
-        case 'User not found':
-        case 'auth/user-not-found':
-          setErrorMessage('No account found with this email address.');
-          break;
+      console.error('Sign in error:', error);
+      switch (error.code) {
         case 'auth/wrong-password':
           setErrorMessage('Incorrect password. Please try again.');
           break;
@@ -72,7 +85,7 @@ function SignIn() {
           setErrorMessage('Too many failed attempts. Please try again later.');
           break;
         default:
-          setErrorMessage('Invalid email or password.');
+          setErrorMessage('An error occurred during sign in. Please try again.');
       }
     } finally {
       setIsLoading(false);

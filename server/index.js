@@ -7,6 +7,7 @@ const FriendRequestController = require('./controllers/friendRequestController')
 const RoomController = require('./controllers/roomController');
 const HealthController = require('./controllers/healthController');
 const SocketController = require('./controllers/socketController');
+const AuthController = require('./controllers/authController');
 const routes = require('./routes');
 const rateLimit = require('express-rate-limit');
 
@@ -24,6 +25,7 @@ const { app, server, io } = configureServer();
 const healthController = new HealthController();
 const roomController = new RoomController(db, userModel, roomModel);
 const friendRequestController = new FriendRequestController(db, io, userModel, roomModel);
+const authController = new AuthController(db, userModel);
 
 // Initialize socket controller for real-time chat functionality
 const socketController = new SocketController(io, roomModel);
@@ -49,7 +51,7 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // Set up routes
-app.use('/', routes(healthController, roomController, friendRequestController));
+app.use('/', routes(healthController, roomController, friendRequestController, authController));
 
 // Error handling middleware
 app.use((err, req, res, next) => {
