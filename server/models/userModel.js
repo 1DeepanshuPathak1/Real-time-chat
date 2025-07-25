@@ -36,10 +36,22 @@ class UserModel {
                 return { message: 'User already exists', code: 'auth/email-already-exists' };
             }
 
-            // Add new user
+            // Generate unique user code
+            let userCode;
+            let codeExists = true;
+            while (codeExists) {
+                userCode = await this.generateUserCode();
+                const existingUser = await this.db.collection(this.collection)
+                    .where('userCode', '==', userCode)
+                    .get();
+                codeExists = !existingUser.empty;
+            }
+
+            // Add new user with generated code
             await this.db.collection(this.collection).add({
                 name: userDetails.name,
                 email: userDetails.email,
+                userCode: userCode,
                 createdAt: new Date().toISOString()
             });
 

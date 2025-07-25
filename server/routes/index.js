@@ -11,9 +11,9 @@ module.exports = (healthController, roomController, friendRequestController) => 
     router.post('/create-room', roomController.createRoom.bind(roomController));
 
     // Friend request routes
-    router.post('/send-friend-request', friendRequestController.sendFriendRequest.bind(friendRequestController));
-    router.post('/respond-friend-request', friendRequestController.respondToFriendRequest.bind(friendRequestController));
-    router.get('/friend-requests/:userId', friendRequestController.getFriendRequests.bind(friendRequestController));
+    router.post('/api/send-friend-request', friendRequestController.sendFriendRequest.bind(friendRequestController));
+    router.post('/api/respond-friend-request', friendRequestController.respondToFriendRequest.bind(friendRequestController));
+    router.get('/api/friend-requests/:userId', friendRequestController.getFriendRequests.bind(friendRequestController));
 
     return router;
 };
