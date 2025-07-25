@@ -3,10 +3,10 @@ const configureServer = require('./config/serverConfig');
 const initializeFirebase = require('./config/firebaseConfig');
 const UserModel = require('./models/userModel');
 const RoomModel = require('./models/roomModel');
-const SocketController = require('./controllers/socketController');
 const FriendRequestController = require('./controllers/friendRequestController');
 const RoomController = require('./controllers/roomController');
 const HealthController = require('./controllers/healthController');
+const SocketController = require('./controllers/socketController');
 const routes = require('./routes');
 const rateLimit = require('express-rate-limit');
 
@@ -24,7 +24,18 @@ const { app, server, io } = configureServer();
 const healthController = new HealthController();
 const roomController = new RoomController(db, userModel, roomModel);
 const friendRequestController = new FriendRequestController(db, io, userModel, roomModel);
+
+// Initialize socket controller for real-time chat functionality
 const socketController = new SocketController(io, roomModel);
+
+// Basic security middleware
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    next();
+});
 
 // Set up rate limiting
 const limiter = rateLimit({

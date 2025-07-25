@@ -61,25 +61,6 @@ class UserModel {
         }
     }
 
-    async fetchContacts(email) {
-        try {
-            const userDoc = await this.db.collection(this.collection)
-                .where('email', '==', email)
-                .get();
-
-            if (userDoc.empty) {
-                return { message: 'User not found' };
-            }
-
-            const userData = userDoc.docs[0].data();
-            const contacts = userData.contacts || [];
-
-            return { contacts, message: 'success' };
-        } catch (err) {
-            return { message: err.message, code: err.code };
-        }
-    }
-
     async generateUserCode() {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         let result = '';

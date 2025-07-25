@@ -2,10 +2,8 @@ const express = require('express');
 const router = express.Router();
 
 module.exports = (healthController, roomController, friendRequestController) => {
-    // Health routes
-    router.get('/', healthController.getStatus);
-    router.get('/health', healthController.getHealth);
-    router.get('/checkup', healthController.getCheckup);
+    // Health route
+    router.get(['/health', '/'], healthController.getStatus.bind(healthController));
 
     // Room routes
     router.post('/create-room', roomController.createRoom.bind(roomController));

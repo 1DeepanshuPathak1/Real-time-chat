@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserPlus, Check, X, Users, Bell } from 'lucide-react';
+import { API_ENDPOINTS } from '../config/api';
 import './css/FriendRequestHandler.css';
 
 export const FriendRequestHandler = ({ user, socket }) => {
@@ -37,7 +38,7 @@ export const FriendRequestHandler = ({ user, socket }) => {
     
     try {
       setLoading(true);
-      const response = await fetch(`https://chat-app-server-uwpx.onrender.com/api/friend-requests/${user.uid}`);
+            const response = await fetch(API_ENDPOINTS.FRIEND_REQUESTS(user.uid));
       if (response.ok) {
         const requests = await response.json();
         setFriendRequests(requests);
@@ -54,7 +55,7 @@ export const FriendRequestHandler = ({ user, socket }) => {
 
     try {
       setLoading(true);
-      const response = await fetch('https://chat-app-server-uwpx.onrender.com/api/send-friend-request', {
+      const response = await fetch(API_ENDPOINTS.SEND_FRIEND_REQUEST, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -84,7 +85,7 @@ export const FriendRequestHandler = ({ user, socket }) => {
 
     try {
       setLoading(true);
-      const res = await fetch('https://chat-app-server-uwpx.onrender.com/api/respond-friend-request', {
+      const res = await fetch(API_ENDPOINTS.RESPOND_FRIEND_REQUEST, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
