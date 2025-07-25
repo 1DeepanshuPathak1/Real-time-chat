@@ -30,9 +30,15 @@ class AuthController {
                 return res.status(400).json({ error: 'Missing required fields' });
             }
 
+            // Check if user exists in our database
             const existingUser = await this.userModel.findUserByEmail(email);
             if (existingUser) {
-                return res.status(400).json({ error: 'User already exists' });
+                // If user exists in our database but has a different UID, something's wrong
+                if (existingUser.id !== uid) {
+                    return res.status(409).json({ error: 'Email already registered with a different account' });
+                }
+                // If same UID, this might be a retry of a failed operation, allow it
+                return res.status(200).json({ message: 'User already exists', user: existingUser });
             }
 
             // Create user document with generated user code

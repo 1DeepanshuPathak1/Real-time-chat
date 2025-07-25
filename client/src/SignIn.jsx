@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, signInWithEmailAndPassword, deleteUser } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
 import { API_ENDPOINTS } from './config/api';
 import './css/signin.css';

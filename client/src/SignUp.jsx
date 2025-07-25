@@ -35,6 +35,21 @@ function SignUp() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const checkIfUserExists = async (email) => {
+    try {
+      const response = await fetch(API_ENDPOINTS.VERIFY_USER, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+      return response.ok; // if ok, user exists
+    } catch (error) {
+      return false; // if error, user doesn't exist
+    }
+  };
+
   const createUserInDb = async (userData) => {
     try {
       const response = await fetch(API_ENDPOINTS.CREATE_USER, {
@@ -67,7 +82,15 @@ function SignUp() {
     }
 
     try {
-      // First create Firebase auth user
+      // First check if user exists in our database
+      const userExists = await checkIfUserExists(formData.email);
+      if (userExists) {
+        setErrorMessage('An account with this email already exists. Please sign in.');
+        setIsLoading(false);
+        return;
+      }
+
+      // If user doesn't exist, create Firebase auth user
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       
       try {
