@@ -49,8 +49,12 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:5173',
-    methods: ['GET', 'POST']
+    origin: [
+      'https://potential-couscous-gvqx4q97w55fvx5w-5173.app.github.dev',
+      'http://localhost:5173'
+    ],
+    methods: ['GET', 'POST'],
+    credentials: true
   }
 });
 
@@ -340,3 +344,4 @@ io.on('connection', (socket) => {
     }
   });
 });
+

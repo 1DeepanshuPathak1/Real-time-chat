@@ -37,7 +37,7 @@ export const FriendRequestHandler = ({ user, socket }) => {
     
     try {
       setLoading(true);
-      const response = await fetch(`http://localhost:3001/friend-requests/${user.uid}`);
+      const response = await fetch(`https://potential-couscous-gvqx4q97w55fvx5w-3001.app.github.dev/friend-requests/${user.uid}`);
       if (response.ok) {
         const requests = await response.json();
         setFriendRequests(requests);
@@ -54,7 +54,7 @@ export const FriendRequestHandler = ({ user, socket }) => {
 
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:3001/send-friend-request', {
+      const response = await fetch('https://potential-couscous-gvqx4q97w55fvx5w-3001.app.github.dev/send-friend-request', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -84,7 +84,7 @@ export const FriendRequestHandler = ({ user, socket }) => {
 
     try {
       setLoading(true);
-      const res = await fetch('http://localhost:3001/respond-friend-request', {
+      const res = await fetch('https://potential-couscous-gvqx4q97w55fvx5w-3001.app.github.dev/respond-friend-request', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

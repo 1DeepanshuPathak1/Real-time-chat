@@ -1,21 +1,40 @@
 import React, { useState } from 'react';
-import { UserPlus, Copy, Check, Users } from 'lucide-react';
+import { UserPlus, Copy, Check, Users, Bell } from 'lucide-react';
+import { FriendRequestHandler } from './FriendRequestHandler';
 import './css/ContactList.css';
 
-export const ContactList = ({ contacts, selectedContact, onContactClick, user }) => {
+export const ContactList = ({ contacts, selectedContact, onContactClick, user, socket }) => {
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [friendEmail, setFriendEmail] = useState('');
   const [copied, setCopied] = useState(false);
+  const [requestStatus, setRequestStatus] = useState({ message: '', type: '' });
 
   const userCode = user?.uid?.slice(-6).toUpperCase() || 'USER123';
 
-  const handleAddFriend = (e) => {
+  const {
+    showRequests,
+    setShowRequests,
+    sendFriendRequest,
+    loading,
+    FriendRequestsModal,
+    FriendRequestBadge
+  } = FriendRequestHandler({ user, socket });
+
+  const handleAddFriend = async (e) => {
     e.preventDefault();
     if (friendEmail.trim()) {
-      // TODO: Implement friend request logic
-      console.log('Sending friend request to:', friendEmail);
-      setFriendEmail('');
-      setShowAddFriend(false);
+      const result = await sendFriendRequest(friendEmail);
+      setRequestStatus({
+        message: result.message,
+        type: result.success ? 'success' : 'error'
+      });
+      
+      if (result.success) {
+        setFriendEmail('');
+        setShowAddFriend(false);
+      }
+      
+      setTimeout(() => setRequestStatus({ message: '', type: '' }), 3000);
     }
   };
 
@@ -37,6 +56,13 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user })
             </button>
           </div>
           <button 
+            className="friend-requests-button"
+            onClick={() => setShowRequests(!showRequests)}
+          >
+            <Bell size={20} />
+            <FriendRequestBadge />
+          </button>
+          <button 
             className="add-friend-button"
             onClick={() => setShowAddFriend(!showAddFriend)}
           >
@@ -45,24 +71,32 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user })
         </div>
       </div>
 
+      {requestStatus.message && (
+        <div className={`status-message ${requestStatus.type}`}>
+          {requestStatus.message}
+        </div>
+      )}
+
       {showAddFriend && (
         <div className="add-friend-modal">
           <form onSubmit={handleAddFriend}>
             <input
-              type="email"
+              type="text"
               placeholder="Enter friend's email or code"
               value={friendEmail}
               onChange={(e) => setFriendEmail(e.target.value)}
               className="friend-input"
+              disabled={loading}
             />
             <div className="modal-buttons">
-              <button type="submit" className="send-request-button">
-                Send Request
+              <button type="submit" className="send-request-button" disabled={loading}>
+                {loading ? 'Sending...' : 'Send Request'}
               </button>
               <button 
                 type="button" 
                 onClick={() => setShowAddFriend(false)}
                 className="cancel-button"
+                disabled={loading}
               >
                 Cancel
               </button>
@@ -70,6 +104,8 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user })
           </form>
         </div>
       )}
+
+      <FriendRequestsModal />
 
       <div className="contact-list-scroll">
         {contacts.length === 0 ? (

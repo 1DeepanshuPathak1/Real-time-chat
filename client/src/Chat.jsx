@@ -73,8 +73,8 @@ function Chat() {
   useEffect(() => {
     if (user && !socketRef.current) {
       console.log('Initializing socket connection for user:', user.uid);
-      socketRef.current = io.connect('http://localhost:3001', { 
-        query: { userId: user.uid } 
+      socketRef.current = io.connect('https://potential-couscous-gvqx4q97w55fvx5w-3001.app.github.dev', {
+        query: { userId: user.uid }
       });
 
       socketRef.current.on('connect', () => {
@@ -133,7 +133,7 @@ function Chat() {
     if (selectedContact && user && socketRef.current) {
       console.log('Joining room:', selectedContact.roomID);
       socketRef.current.emit('join-room', selectedContact.roomID);
-      
+
       const q = query(collection(db, 'rooms', selectedContact.roomID, 'messages'));
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const messagesData = snapshot.docs
@@ -168,7 +168,7 @@ function Chat() {
         time: new Date().toISOString(),
         type: 'poll'
       };
-      
+
       try {
         await addDoc(collection(db, 'rooms', selectedContact.roomID, 'messages'), newPoll);
         socketRef.current.emit('send-poll', {
@@ -212,6 +212,7 @@ function Chat() {
           selectedContact={selectedContact}
           onContactClick={handleContactClick}
           user={user}
+          socket={socketRef.current}
         />
         <div className="chat-window">
           {selectedContact ? (

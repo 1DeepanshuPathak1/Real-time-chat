@@ -273,3 +273,23 @@
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(18, 140, 126, 0.3);
 }
+
+.friend-requests-button {
+  background-color: #ff6b35;
+  border: none;
+  color: white;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.friend-requests-button:hover {
+  background-color: #e55a2b;
+  transform: scale(1.1);
+}
