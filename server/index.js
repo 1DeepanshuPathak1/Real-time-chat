@@ -47,20 +47,55 @@ const db = getFirestore();
 
 const app = express();
 const server = http.createServer(app);
+
+const allowedOrigins = [
+  'https://potential-couscous-gvqx4q97w55fvx5w-5173.app.github.dev',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://localhost:5173'
+];
+
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.push(process.env.FRONTEND_URL);
+}
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
+});
+
 const io = new Server(server, {
   cors: {
-    origin: [
-      'https://potential-couscous-gvqx4q97w55fvx5w-5173.app.github.dev',
-      'http://localhost:5173'
-    ],
-    methods: ['GET', 'POST'],
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type"],
     credentials: true
   }
 });
-
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
 const generateUserCode = () => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -72,25 +107,38 @@ const generateUserCode = () => {
 };
 
 const ensureUserCode = async (userId) => {
-  const userRef = db.collection('users').doc(userId);
-  const userDoc = await userRef.get();
-  
-  if (userDoc.exists && !userDoc.data().userCode) {
-    let userCode;
-    let codeExists = true;
+  try {
+    const userRef = db.collection('users').doc(userId);
+    const userDoc = await userRef.get();
     
-    while (codeExists) {
-      userCode = generateUserCode();
-      const existingUser = await db.collection('users').where('userCode', '==', userCode).get();
-      codeExists = !existingUser.empty;
+    if (userDoc.exists && !userDoc.data().userCode) {
+      let userCode;
+      let codeExists = true;
+      
+      while (codeExists) {
+        userCode = generateUserCode();
+        const existingUser = await db.collection('users').where('userCode', '==', userCode).get();
+        codeExists = !existingUser.empty;
+      }
+      
+      await userRef.update({ userCode });
+      return userCode;
     }
     
-    await userRef.update({ userCode });
-    return userCode;
+    return userDoc.data()?.userCode;
+  } catch (error) {
+    console.error('Error ensuring user code:', error);
+    return null;
   }
-  
-  return userDoc.data()?.userCode;
 };
+
+app.get('/', (req, res) => {
+  res.json({ message: 'Chat Server API is running', status: 'OK' });
+});
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
 
 app.get('/checkup', (req, res) => {
   res.send('Server is working');
@@ -100,14 +148,14 @@ app.post('/create-room', async (req, res) => {
   const { userId, contactEmail } = req.body;
   try {
     if (!userId || !contactEmail) {
-      return res.status(400).send('Missing userId or contactEmail');
+      return res.status(400).json({ error: 'Missing userId or contactEmail' });
     }
 
     const userDoc = await db.collection('users').doc(userId).get();
     const contactDoc = await db.collection('users').where('email', '==', contactEmail).get();
 
     if (!userDoc.exists || contactDoc.empty) {
-      return res.status(404).send('User or contact not found');
+      return res.status(404).json({ error: 'User or contact not found' });
     }
 
     const contact = contactDoc.docs[0].data();
@@ -133,10 +181,10 @@ app.post('/create-room', async (req, res) => {
       unreadCount: 0
     });
 
-    res.status(200).send({ roomId });
+    res.status(200).json({ roomId });
   } catch (error) {
     console.error('Error creating room:', error);
-    res.status(500).send('Server error');
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -145,51 +193,50 @@ app.post('/send-friend-request', async (req, res) => {
   
   try {
     if (!senderId || !recipientIdentifier) {
-      return res.status(400).send('Missing senderId or recipientIdentifier');
+      return res.status(400).json({ error: 'Missing senderId or recipientIdentifier' });
     }
 
     await ensureUserCode(senderId);
     
     const senderDoc = await db.collection('users').doc(senderId).get();
     if (!senderDoc.exists) {
-      return res.status(404).send('Sender not found');
+      return res.status(404).json({ error: 'Sender not found' });
     }
 
     let recipientDoc;
     if (recipientIdentifier.includes('@')) {
       const recipientQuery = await db.collection('users').where('email', '==', recipientIdentifier).get();
       if (recipientQuery.empty) {
-        return res.status(404).send('User not found with this email');
+        return res.status(404).json({ error: 'User not found with this email' });
       }
       recipientDoc = recipientQuery.docs[0];
     } else {
       const recipientQuery = await db.collection('users').where('userCode', '==', recipientIdentifier.toUpperCase()).get();
       if (recipientQuery.empty) {
-        return res.status(404).send('User not found with this code');
+        return res.status(404).json({ error: 'User not found with this code' });
       }
       recipientDoc = recipientQuery.docs[0];
     }
 
     const recipientId = recipientDoc.id;
-    const recipientData = recipientDoc.data();
 
     if (senderId === recipientId) {
-      return res.status(400).send('Cannot send friend request to yourself');
+      return res.status(400).json({ error: 'Cannot send friend request to yourself' });
     }
 
     const existingContact = await db.collection('users').doc(senderId).collection('contacts').doc(recipientId).get();
     if (existingContact.exists) {
-      return res.status(400).send('User is already in your contacts');
+      return res.status(400).json({ error: 'User is already in your contacts' });
     }
 
     const existingRequest = await db.collection('users').doc(recipientId).collection('friendRequests').doc(senderId).get();
     if (existingRequest.exists) {
-      return res.status(400).send('Friend request already sent');
+      return res.status(400).json({ error: 'Friend request already sent' });
     }
 
     const reverseRequest = await db.collection('users').doc(senderId).collection('friendRequests').doc(recipientId).get();
     if (reverseRequest.exists) {
-      return res.status(400).send('This user has already sent you a friend request');
+      return res.status(400).json({ error: 'This user has already sent you a friend request' });
     }
 
     await db.collection('users').doc(recipientId).collection('friendRequests').doc(senderId).set({
@@ -207,10 +254,10 @@ app.post('/send-friend-request', async (req, res) => {
       timestamp: new Date().toISOString()
     });
 
-    res.status(200).send('Friend request sent successfully');
+    res.status(200).json({ message: 'Friend request sent successfully' });
   } catch (error) {
     console.error('Error sending friend request:', error);
-    res.status(500).send('Server error');
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -219,12 +266,12 @@ app.post('/respond-friend-request', async (req, res) => {
   
   try {
     if (!userId || !senderId || !['accept', 'reject'].includes(response)) {
-      return res.status(400).send('Invalid request parameters');
+      return res.status(400).json({ error: 'Invalid request parameters' });
     }
 
     const requestDoc = await db.collection('users').doc(userId).collection('friendRequests').doc(senderId).get();
     if (!requestDoc.exists) {
-      return res.status(404).send('Friend request not found');
+      return res.status(404).json({ error: 'Friend request not found' });
     }
 
     if (response === 'accept') {
@@ -267,10 +314,10 @@ app.post('/respond-friend-request', async (req, res) => {
       response: response
     });
 
-    res.status(200).send(`Friend request ${response}ed successfully`);
+    res.status(200).json({ message: `Friend request ${response}ed successfully` });
   } catch (error) {
     console.error('Error responding to friend request:', error);
-    res.status(500).send('Server error');
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -281,10 +328,10 @@ app.get('/friend-requests/:userId', async (req, res) => {
     const requestsSnapshot = await db.collection('users').doc(userId).collection('friendRequests').get();
     const requests = requestsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     
-    res.status(200).send(requests);
+    res.status(200).json(requests);
   } catch (error) {
     console.error('Error fetching friend requests:', error);
-    res.status(500).send('Server error');
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -343,5 +390,13 @@ io.on('connection', (socket) => {
       console.error('Error leaving room:', error);
     }
   });
+
+  socket.on('disconnect', () => {
+    console.log('Socket disconnected:', socket.id);
+  });
 });
 
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+});
