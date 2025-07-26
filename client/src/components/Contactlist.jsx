@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { UserPlus, Copy, Check, Users, Bell, ChevronUp, ChevronDown } from 'lucide-react';
 import { FaSun, FaMoon } from 'react-icons/fa';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
@@ -12,8 +12,13 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
   const [requestStatus, setRequestStatus] = useState({ message: '', type: '' });
   const [userCode, setUserCode] = useState('LOADING...');
   const [showFooter, setShowFooter] = useState(false);
-
+  
+  const footerStateRef = useRef(showFooter);
   const db = getFirestore();
+
+  useEffect(() => {
+    footerStateRef.current = showFooter;
+  }, [showFooter]);
 
   useEffect(() => {
     const fetchUserCode = async () => {
@@ -32,7 +37,7 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
     };
 
     fetchUserCode();
-  }, [user, db]);
+  }, [user?.uid, db]);
 
   const {
     showRequests,
@@ -43,7 +48,7 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
     FriendRequestBadge
   } = FriendRequestHandler({ user });
 
-  const handleAddFriend = async (e) => {
+  const handleAddFriend = useCallback(async (e) => {
     e.preventDefault();
     if (friendEmail.trim()) {
       const result = await sendFriendRequest(friendEmail);
@@ -59,15 +64,15 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
       
       setTimeout(() => setRequestStatus({ message: '', type: '' }), 3000);
     }
-  };
+  }, [friendEmail, sendFriendRequest]);
 
-  const copyUserCode = () => {
+  const copyUserCode = useCallback(() => {
     navigator.clipboard.writeText(userCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
+  }, [userCode]);
 
-  const handleThemeChange = () => {
+  const handleThemeChange = useCallback(() => {
     const newTheme = !isDark;
     onThemeChange(newTheme);
 
@@ -85,7 +90,15 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
       root.style.setProperty('--border-color', '#e2e8f0');
       root.style.setProperty('--accent-color', '#3b82f6');
     }
-  };
+  }, [isDark, onThemeChange]);
+
+  const handleContactClick = useCallback((contact) => {
+    onContactClick(contact);
+  }, [onContactClick]);
+
+  const handleFooterToggle = useCallback(() => {
+    setShowFooter(prev => !prev);
+  }, []);
 
   return (
     <div className={`contact-list ${isDark ? 'dark' : 'light'}`}>
@@ -163,7 +176,7 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
             <div
               key={contact.id}
               className={`contact-item ${selectedContact?.roomID === contact.roomID ? 'selected' : ''}`}
-              onClick={() => onContactClick(contact)}
+              onClick={() => handleContactClick(contact)}
             >
               <div className="contact-avatar-container">
                 <img
@@ -196,7 +209,7 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
       <div className="contact-list-footer-container">
         <button 
           className={`footer-toggle ${showFooter ? 'open' : ''}`}
-          onClick={() => setShowFooter(!showFooter)}
+          onClick={handleFooterToggle}
         >
           <ChevronUp size={20} />
         </button>

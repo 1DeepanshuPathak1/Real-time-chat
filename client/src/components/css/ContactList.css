@@ -22,6 +22,8 @@
   display: flex;
   flex-direction: column;
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  height: 100vh;
+  overflow: hidden;
 }
 
 .contact-list.dark {
@@ -43,12 +45,13 @@
 }
 
 .contact-list-header {
-  padding: 20px;
+  padding: 15.5px;
   border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
   backdrop-filter: blur(10px);
+  flex-shrink: 0;
 }
 
 .contact-list.dark .contact-list-header {
@@ -130,6 +133,7 @@
   font-weight: 500;
   animation: slideDown 0.3s ease-out;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
 }
 
 .status-message.success {
@@ -153,6 +157,7 @@
               padding 0.5s cubic-bezier(0.4, 0, 0.2, 1),
               opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   opacity: 0;
+  flex-shrink: 0;
 }
 
 .add-friend-modal.show {
@@ -275,9 +280,12 @@
 }
 
 .contact-list-scroll {
-  flex-grow: 1;
+  flex: 1;
   overflow-y: auto;
   padding: 10px 0;
+  min-height: 0;
+  will-change: scroll-position;
+  transform: translateZ(0);
 }
 
 .contact-item {
@@ -526,6 +534,7 @@
 .contact-list-footer-container {
   position: relative;
   border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 
 .footer-toggle {
@@ -568,16 +577,17 @@
   overflow: hidden;
   border-top: 1px solid var(--border-color);
   backdrop-filter: blur(10px);
-  max-height: 0;
-  transition: max-height 0.6s cubic-bezier(0.4, 0, 0.2, 1), 
+  height: 0;
+  transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1), 
               padding 0.6s cubic-bezier(0.4, 0, 0.2, 1),
               opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   opacity: 0;
 }
 
 .contact-list-footer.show {
-  max-height: 100px;
+  height: 71px;
   padding: 10.4px;
+  padding-bottom: 0;
   opacity: 1;
 }
 
