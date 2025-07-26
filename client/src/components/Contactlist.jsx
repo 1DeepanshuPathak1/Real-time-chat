@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { UserPlus, Copy, Check, Users, Bell, ChevronUp, ChevronDown } from 'lucide-react';
 import { FaSun, FaMoon } from 'react-icons/fa';
-import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 import { FriendRequestHandler } from './FriendRequestHandler';
 import { useContactStatus } from './UserStatusManager';
 import './css/ContactList.css';
@@ -42,6 +42,15 @@ const ContactItem = ({ contact, selectedContact, onContactClick, handleContactCl
   );
 };
 
+const generateUserCode = () => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < 8; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
+
 export const ContactList = ({ contacts, selectedContact, onContactClick, user, onThemeChange, isDark }) => {
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [friendEmail, setFriendEmail] = useState('');
@@ -58,23 +67,47 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
   }, [showFooter]);
 
   useEffect(() => {
-    const fetchUserCode = async () => {
+    const fetchOrCreateUserCode = async () => {
       if (user?.uid) {
         try {
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          const userDocRef = doc(db, 'users', user.uid);
+          const userDoc = await getDoc(userDocRef);
+          
           if (userDoc.exists()) {
             const userData = userDoc.data();
-            setUserCode(userData.userCode || 'NO CODE');
+            if (userData.userCode) {
+              setUserCode(userData.userCode);
+            } else {
+              const newUserCode = generateUserCode();
+              await setDoc(userDocRef, {
+                userCode: newUserCode,
+                email: user.email,
+                uid: user.uid,
+                isOnline: true,
+                lastSeen: new Date().toISOString()
+              }, { merge: true });
+              setUserCode(newUserCode);
+            }
+          } else {
+            const newUserCode = generateUserCode();
+            await setDoc(userDocRef, {
+              userCode: newUserCode,
+              email: user.email,
+              uid: user.uid,
+              isOnline: true,
+              lastSeen: new Date().toISOString()
+            });
+            setUserCode(newUserCode);
           }
         } catch (error) {
-          console.error('Error fetching user code:', error);
+          console.error('Error fetching/creating user code:', error);
           setUserCode('ERROR');
         }
       }
     };
 
-    fetchUserCode();
-  }, [user?.uid, db]);
+    fetchOrCreateUserCode();
+  }, [user?.uid, user?.email, db]);
 
   const {
     showRequests,

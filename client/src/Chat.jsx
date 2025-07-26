@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, query, onSnapshot, addDoc, orderBy } from 'firebase/firestore';
+import { getFirestore, collection, query, onSnapshot, addDoc, orderBy, limit, startAfter, getDocs } from 'firebase/firestore';
 import { SocketProvider, useSocket } from './services/SocketService';
 import { EmojiPickerComponent } from './components/EmojiPicker';
 import { ParticlesBackground } from './components/ParticlesBackground';
@@ -44,7 +44,14 @@ function ChatContent() {
   const [isDark, setIsDark] = useState(true);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [oldestMessage, setOldestMessage] = useState(null);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const [showStartMessage, setShowStartMessage] = useState(false);
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   const documentInputRef = useRef(null);
   const videoRef = useRef(null);
@@ -102,23 +109,155 @@ function ChatContent() {
       console.log('Joining room:', selectedContact.roomID);
       joinRoom(selectedContact.roomID);
 
-      const q = query(
-        collection(db, 'rooms', selectedContact.roomID, 'messages'),
-        orderBy('time', 'asc')
-      );
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const messagesData = snapshot.docs.map(doc => ({ 
-          id: doc.id, 
-          ...doc.data(),
-          time: new Date(doc.data().time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }));
-        console.log('Messages loaded:', messagesData.length);
-        setMessages(messagesData);
-      });
+      setMessages([]);
+      setOldestMessage(null);
+      setHasMoreMessages(true);
+      setShowStartMessage(false);
+      setPullDistance(0);
+      setIsPulling(false);
 
-      return () => unsubscribe();
+      const loadInitialMessages = async () => {
+        try {
+          const q = query(
+            collection(db, 'rooms', selectedContact.roomID, 'messages'),
+            orderBy('time', 'desc'),
+            limit(50)
+          );
+          
+          const snapshot = await getDocs(q);
+          const messagesData = snapshot.docs.map(doc => ({ 
+            id: doc.id, 
+            ...doc.data(),
+            time: new Date(doc.data().time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            timestamp: doc.data().time
+          }));
+          
+          const sortedMessages = messagesData.reverse();
+          console.log('Initial messages loaded:', sortedMessages.length);
+          setMessages(sortedMessages);
+          
+          if (messagesData.length > 0) {
+            setOldestMessage(snapshot.docs[snapshot.docs.length - 1]);
+            
+            const realtimeQ = query(
+              collection(db, 'rooms', selectedContact.roomID, 'messages'),
+              orderBy('time', 'asc')
+            );
+            
+            const unsubscribe = onSnapshot(realtimeQ, (realtimeSnapshot) => {
+              const allMessages = realtimeSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                time: new Date(doc.data().time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                timestamp: doc.data().time
+              }));
+              
+              setMessages(allMessages);
+            });
+            
+            return unsubscribe;
+          } else {
+            const realtimeQ = query(
+              collection(db, 'rooms', selectedContact.roomID, 'messages'),
+              orderBy('time', 'asc')
+            );
+            
+            const unsubscribe = onSnapshot(realtimeQ, (realtimeSnapshot) => {
+              const allMessages = realtimeSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                time: new Date(doc.data().time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                timestamp: doc.data().time
+              }));
+              
+              setMessages(allMessages);
+            });
+            
+            return unsubscribe;
+          }
+          
+          if (messagesData.length < 50) {
+            setHasMoreMessages(false);
+            setShowStartMessage(true);
+          }
+        } catch (error) {
+          console.error('Error loading initial messages:', error);
+        }
+      };
+
+      const unsubscribePromise = loadInitialMessages();
+      
+      return () => {
+        unsubscribePromise.then(unsubscribe => {
+          if (unsubscribe) unsubscribe();
+        });
+      };
     }
   }, [selectedContact, user, isConnected, joinRoom]);
+
+  const loadOlderMessages = async () => {
+    if (!selectedContact || !oldestMessage || loadingOlderMessages || !hasMoreMessages) return;
+
+    setLoadingOlderMessages(true);
+    
+    try {
+      const q = query(
+        collection(db, 'rooms', selectedContact.roomID, 'messages'),
+        orderBy('time', 'desc'),
+        startAfter(oldestMessage),
+        limit(50)
+      );
+
+      const snapshot = await getDocs(q);
+      const olderMessages = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        time: new Date(doc.data().time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: doc.data().time
+      }));
+
+      if (olderMessages.length > 0) {
+        const sortedOlderMessages = olderMessages.reverse();
+        setMessages(prevMessages => [...sortedOlderMessages, ...prevMessages]);
+        setOldestMessage(snapshot.docs[snapshot.docs.length - 1]);
+        
+        if (olderMessages.length < 50) {
+          setHasMoreMessages(false);
+          setShowStartMessage(true);
+        }
+      } else {
+        setHasMoreMessages(false);
+        setShowStartMessage(true);
+      }
+    } catch (error) {
+      console.error('Error loading older messages:', error);
+    } finally {
+      setLoadingOlderMessages(false);
+    }
+  };
+
+  const handleScroll = (e) => {
+    const { scrollTop } = e.target;
+    
+    if (scrollTop <= 0 && hasMoreMessages && !loadingOlderMessages) {
+      setIsPulling(true);
+    } else if (isPulling && scrollTop > 0) {
+      setIsPulling(false);
+      setPullDistance(0);
+    }
+    
+    if (isPulling && scrollTop < 0) {
+      const distance = Math.abs(scrollTop);
+      setPullDistance(Math.min(distance, 80));
+      
+      if (distance > 60) {
+        setIsPulling(false);
+        setPullDistance(0);
+        e.target.scrollTop = 0;
+        loadOlderMessages();
+      }
+    }
+  };
 
   useEffect(() => {
     const unsubscribeMessage = onMessageReceived((data) => {
@@ -139,7 +278,11 @@ function ChatContent() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  useEffect(scrollToBottom, [messages]);
+  useEffect(() => {
+    if (messages.length > 0 && !loadingOlderMessages) {
+      scrollToBottom();
+    }
+  }, [messages, loadingOlderMessages]);
 
   const handleContactClick = (contact) => {
     if (selectedContact && isConnected) {
@@ -203,8 +346,30 @@ function ChatContent() {
           {selectedContact ? (
             <>
               <ChatHeader selectedContact={selectedContact} isDark={isDark} />
-              <div className="messages-container">
+              <div className="messages-container" ref={messagesContainerRef} onScroll={handleScroll}>
                 <ParticlesBackground />
+                <div 
+                  className={`pull-to-refresh ${isPulling ? 'pulling' : ''}`}
+                  style={{ transform: `translateY(${pullDistance}px)` }}
+                >
+                  <div className="pull-indicator">
+                    <div className="pull-spinner"></div>
+                    <span>{pullDistance > 40 ? 'Release to load' : 'Pull to load older messages'}</span>
+                  </div>
+                </div>
+                {loadingOlderMessages && (
+                  <div className="loading-overlay">
+                    <div className="loading-spinner"></div>
+                  </div>
+                )}
+                {(!hasMoreMessages || messages.length === 0) && (
+                  <div className="conversation-start">
+                    <div className="start-message">
+                      <h3>👋 Say hello to {selectedContact?.name}!</h3>
+                      <p>This is the beginning of your conversation.</p>
+                    </div>
+                  </div>
+                )}
                 <MessageList
                   messages={messages}
                   messagesEndRef={messagesEndRef}
