@@ -17,8 +17,8 @@ class SocketController {
             socket.on('send-message', async (data) => {
                 const { roomID, message, sender } = data;
                 try {
-                    await this.roomModel.addMessage(roomID, sender, message, 'text');
-                    socket.to(roomID).emit('received-message', { sender, message });
+                    await this.roomModel.addMessage(roomID, sender, message.content, message.type);
+                    socket.to(roomID).emit('received-message', { sender, message: message.content });
                 } catch (error) {
                     console.error('Error sending message:', error);
                 }

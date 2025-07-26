@@ -12,13 +12,16 @@ class RoomModel {
         return roomId;
     }
 
-    async addMessage(roomId, sender, content, type = 'text') {
-        return await this.db.collection('rooms').doc(roomId).collection('messages').add({
+    async addMessage(roomId, sender, content, type = 'text', additionalData = {}) {
+        const messageData = {
             sender,
             content,
             time: new Date().toISOString(),
-            type
-        });
+            type,
+            ...additionalData
+        };
+        
+        return await this.db.collection('rooms').doc(roomId).collection('messages').add(messageData);
     }
 }
 

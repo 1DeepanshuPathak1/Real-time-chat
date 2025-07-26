@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, query, onSnapshot, addDoc } from 'firebase/firestore';
+import { getFirestore, collection, query, onSnapshot, addDoc, orderBy } from 'firebase/firestore';
 import { SocketProvider, useSocket } from './services/SocketService';
 import { EmojiPickerComponent } from './components/EmojiPicker';
 import { ParticlesBackground } from './components/ParticlesBackground';
@@ -98,11 +98,16 @@ function ChatContent() {
       console.log('Joining room:', selectedContact.roomID);
       joinRoom(selectedContact.roomID);
 
-      const q = query(collection(db, 'rooms', selectedContact.roomID, 'messages'));
+      const q = query(
+        collection(db, 'rooms', selectedContact.roomID, 'messages'),
+        orderBy('time', 'asc')
+      );
       const unsubscribe = onSnapshot(q, (snapshot) => {
-        const messagesData = snapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() }))
-          .sort((a, b) => new Date(a.time) - new Date(b.time));
+        const messagesData = snapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          ...doc.data(),
+          time: new Date(doc.data().time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }));
         console.log('Messages loaded:', messagesData.length);
         setMessages(messagesData);
       });
@@ -113,25 +118,11 @@ function ChatContent() {
 
   useEffect(() => {
     const unsubscribeMessage = onMessageReceived((data) => {
-      console.log('Received message:', data);
-      setMessages((prev) => [...prev, {
-        id: Date.now(),
-        sender: data.sender,
-        content: data.message,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        type: 'text'
-      }]);
+      console.log('Received real-time message:', data);
     });
 
     const unsubscribePoll = onPollReceived((data) => {
-      console.log('Received poll:', data);
-      setMessages((prev) => [...prev, {
-        id: Date.now(),
-        sender: data.sender,
-        content: data.poll,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        type: 'poll'
-      }]);
+      console.log('Received real-time poll:', data);
     });
 
     return () => {

@@ -1,5 +1,4 @@
 import { getFirestore, collection, addDoc } from 'firebase/firestore';
-import { createMessage } from '../services/messageServices';
 
 const db = getFirestore();
 
@@ -13,16 +12,20 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
         type: 'text'
       };
 
-      const docRef = await addDoc(collection(db, 'rooms', selectedContact.roomID, 'messages'), messageData);
-      setMessages(prev => [...prev, { ...messageData, id: docRef.id }]);
-      setInputMessage('');
-
-      if (socket) {
-        socket.emit('send-message', {
-          roomID: selectedContact.roomID,
-          message: messageData,
-          sender: user.email
-        });
+      try {
+        const docRef = await addDoc(collection(db, 'rooms', selectedContact.roomID, 'messages'), messageData);
+        
+        if (socket) {
+          socket.emit('send-message', {
+            roomID: selectedContact.roomID,
+            message: messageData,
+            sender: user.email
+          });
+        }
+        
+        setInputMessage('');
+      } catch (error) {
+        console.error('Error sending message:', error);
       }
     }
   };
@@ -39,8 +42,19 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
             type: 'image'
           };
 
-          const docRef = await addDoc(collection(db, 'rooms', selectedContact.roomID, 'messages'), messageData);
-          setMessages(prev => [...prev, { ...messageData, id: docRef.id }]);
+          try {
+            const docRef = await addDoc(collection(db, 'rooms', selectedContact.roomID, 'messages'), messageData);
+            
+            if (socket) {
+              socket.emit('send-message', {
+                roomID: selectedContact.roomID,
+                message: messageData,
+                sender: user.email
+              });
+            }
+          } catch (error) {
+            console.error('Error sending image:', error);
+          }
         };
         reader.readAsDataURL(file);
       } else if (type === 'document') {
@@ -54,8 +68,19 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
           fileType: file.type
         };
 
-        const docRef = await addDoc(collection(db, 'rooms', selectedContact.roomID, 'messages'), messageData);
-        setMessages(prev => [...prev, { ...messageData, id: docRef.id }]);
+        try {
+          const docRef = await addDoc(collection(db, 'rooms', selectedContact.roomID, 'messages'), messageData);
+          
+          if (socket) {
+            socket.emit('send-message', {
+              roomID: selectedContact.roomID,
+              message: messageData,
+              sender: user.email
+            });
+          }
+        } catch (error) {
+          console.error('Error sending document:', error);
+        }
       }
     }
   };
