@@ -11,7 +11,7 @@ const configureServer = () => {
         'https://potential-couscous-gvqx4q97w55fvx5w-5173.app.github.dev',
         'http://localhost:5173',
         'http://localhost:3000',
-        'real-time-chat-olive-five.vercel.app'
+        'https://real-time-chat-olive-five.vercel.app'
     ];
 
     if (process.env.FRONTEND_URL) {
