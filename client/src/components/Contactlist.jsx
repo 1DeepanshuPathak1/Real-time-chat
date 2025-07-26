@@ -3,7 +3,44 @@ import { UserPlus, Copy, Check, Users, Bell, ChevronUp, ChevronDown } from 'luci
 import { FaSun, FaMoon } from 'react-icons/fa';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { FriendRequestHandler } from './FriendRequestHandler';
+import { useContactStatus } from './UserStatusManager';
 import './css/ContactList.css';
+
+const ContactItem = ({ contact, selectedContact, onContactClick, handleContactClick }) => {
+  const status = useContactStatus(contact);
+  
+  return (
+    <div
+      key={contact.id}
+      className={`contact-item ${selectedContact?.roomID === contact.roomID ? 'selected' : ''}`}
+      onClick={() => handleContactClick(contact)}
+    >
+      <div className="contact-avatar-container">
+        <img
+          src={`https://api.dicebear.com/6.x/initials/svg?seed=${contact.name}`}
+          alt={contact.name}
+          className="contact-avatar"
+        />
+        {status.isOnline && <div className="online-indicator"></div>}
+      </div>
+      <div className="contact-info">
+        <div className="contact-name-time">
+          <h2>{contact.name}</h2>
+        </div>
+        <div className="contact-status">
+          {status.isOnline ? (
+            <span className="online-text">Online</span>
+          ) : (
+            <span className="offline-text">{status.lastSeen}</span>
+          )}
+        </div>
+      </div>
+      {contact.unreadCount > 0 && (
+        <div className="unread-count">{contact.unreadCount}</div>
+      )}
+    </div>
+  );
+};
 
 export const ContactList = ({ contacts, selectedContact, onContactClick, user, onThemeChange, isDark }) => {
   const [showAddFriend, setShowAddFriend] = useState(false);
@@ -173,35 +210,13 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
           </div>
         ) : (
           contacts.map((contact) => (
-            <div
+            <ContactItem
               key={contact.id}
-              className={`contact-item ${selectedContact?.roomID === contact.roomID ? 'selected' : ''}`}
-              onClick={() => handleContactClick(contact)}
-            >
-              <div className="contact-avatar-container">
-                <img
-                  src={`https://api.dicebear.com/6.x/initials/svg?seed=${contact.name}`}
-                  alt={contact.name}
-                  className="contact-avatar"
-                />
-                {contact.isOnline && <div className="online-indicator"></div>}
-              </div>
-              <div className="contact-info">
-                <div className="contact-name-time">
-                  <h2>{contact.name}</h2>
-                </div>
-                <div className="contact-status">
-                  {contact.isOnline ? (
-                    <span className="online-text">Online</span>
-                  ) : (
-                    <span className="offline-text">Last seen {contact.lastSeen || 'recently'}</span>
-                  )}
-                </div>
-              </div>
-              {contact.unreadCount > 0 && (
-                <div className="unread-count">{contact.unreadCount}</div>
-              )}
-            </div>
+              contact={contact}
+              selectedContact={selectedContact}
+              onContactClick={onContactClick}
+              handleContactClick={handleContactClick}
+            />
           ))
         )}
       </div>

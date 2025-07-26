@@ -14,6 +14,7 @@ import { MessageInput } from './components/MessageInput';
 import { PollCreator } from './components/poll-creator';
 import { useCameraHandlers } from './components/CameraHandlers';
 import { useMessageHandlers } from './components/MessageHandlers';
+import { useUserStatus } from './components/UserStatusManager';
 import './css/Chat.css';
 import { useNavigate } from 'react-router-dom';
 
@@ -49,6 +50,8 @@ function ChatContent() {
   const videoRef = useRef(null);
   const navigate = useNavigate();
 
+  useUserStatus(user);
+
   const { 
     socket, 
     isConnected, 
@@ -81,16 +84,12 @@ function ChatContent() {
 
   useEffect(() => {
     if (user) {
-      console.log('Fetching contacts for user:', user.uid);
       const q = query(collection(db, 'users', user.uid, 'contacts'));
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const contactsData = snapshot.docs.map(doc => ({ 
           id: doc.id, 
-          ...doc.data(),
-          isOnline: Math.random() > 0.5,
-          lastSeen: Math.random() > 0.5 ? 'yesterday' : '2 hours ago'
+          ...doc.data()
         }));
-        console.log('Contacts loaded:', contactsData);
         setContacts(contactsData);
       });
 
