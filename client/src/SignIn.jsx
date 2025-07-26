@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, deleteUser } from 'firebase/auth';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { API_ENDPOINTS } from './config/api';
 import './css/signin.css';
 
@@ -124,7 +124,7 @@ function SignIn() {
           </button>
         </form>
         <p className="auth-switch">
-          Don't have an account? <a href="/signup">Sign Up</a>
+          Don't have an account? <Link to="/signup">Sign Up</Link>
         </p>
         {errorMessage && <div className="auth-error">{errorMessage}</div>}
       </div>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { API_ENDPOINTS } from './config/api';
 import './css/signin.css';
 
@@ -197,7 +197,7 @@ function SignUp() {
           </button>
         </form>
         <p className="auth-switch">
-          Already have an account? <a href="/">Sign In</a>
+          Already have an account? <Link to="/">Sign In</Link>
         </p>
         {errorMessage && <div className="auth-error">{errorMessage}</div>}
       </div>
