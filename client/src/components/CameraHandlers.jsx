@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { getFirestore, collection, addDoc } from 'firebase/firestore';
-import { createMessage } from '../services/messageServices';
 
 const db = getFirestore();
 
-export const useCameraHandlers = (setMessages, videoRef, selectedContact) => {
+export const useCameraHandlers = (setMessages, videoRef, selectedContact, user) => {
   const [stream, setStream] = useState(null);
 
   const startCamera = async () => {
@@ -34,12 +33,15 @@ export const useCameraHandlers = (setMessages, videoRef, selectedContact) => {
       canvas.getContext('2d').drawImage(videoRef.current, 0, 0);
       const imageData = canvas.toDataURL('image/jpeg');
 
-      const newMessage = createMessage(imageData, 'image');
-      await addDoc(collection(db, 'rooms', selectedContact.roomID, 'messages'), {
-        ...newMessage,
-        sender: selectedContact.email
-      });
-      setMessages(prev => [...prev, newMessage]);
+      const newMessage = {
+        sender: user.email, // Fix: use sender's email, not recipient's
+        content: imageData,
+        time: new Date().toISOString(),
+        type: 'image'
+      };
+      
+      const docRef = await addDoc(collection(db, 'rooms', selectedContact.roomID, 'messages'), newMessage);
+      setMessages(prev => [...prev, { ...newMessage, id: docRef.id }]);
 
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
