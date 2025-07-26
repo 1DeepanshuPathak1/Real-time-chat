@@ -11,9 +11,7 @@ const configureServer = () => {
         'https://potential-couscous-gvqx4q97w55fvx5w-5173.app.github.dev',
         'http://localhost:5173',
         'http://localhost:3000',
-        'https://localhost:5173',
-        'https://chat-app-102f9.web.app',    // Add your Firebase hosting URL
-        'https://chat-app-102f9.firebaseapp.com'  // Add alternative Firebase hosting URL
+        'real-time-chat-olive-five.vercel.app'
     ];
 
     if (process.env.FRONTEND_URL) {
