@@ -5,19 +5,13 @@ import path from 'path'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: '/',
   build: {
-    outDir: 'dist',
-    sourcemap: true,
-    rollupOptions: {
-      output: {
-        manualChunks: undefined
-      }
-    }
+    outDir: 'dist'
   },
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src')
-    }
+  server: {
+    port: 3000
+  },
+  preview: {
+    port: 3000
   }
 })
