@@ -22,8 +22,7 @@ body {
 
 .app-container {
   display: flex;
-  justify-content: center;
-  align-items: center;
+  width: 100vw;
   height: 100vh;
   background-color: #f0f2f5;
 }
@@ -35,11 +34,8 @@ body {
 .chat-container {
   display: flex;
   width: 100%;
-  max-width: 1400px;
-  height: 90vh;
+  height: 100%;
   background-color: var(--bg-color);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  border-radius: 12px;
   overflow: hidden;
 }
 
@@ -136,10 +132,16 @@ body {
 
 .messages-scroll {
   height: 100%;
-  overflow-y: auto;
+  overflow-y: overlay;
   padding: 20px;
   position: relative;
   z-index: 1;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.messages-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 .message {
@@ -286,8 +288,8 @@ body {
 .emoji-picker-container {
   position: absolute;
   bottom: 80px;
-  left: 20px;
   z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .attach-menu {
