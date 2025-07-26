@@ -5,11 +5,10 @@ import path from 'path'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: './',
+  base: '/',
   build: {
     outDir: 'dist',
     sourcemap: true,
-    assetsDir: 'assets',
     rollupOptions: {
       output: {
         manualChunks: undefined
