@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Copy, Check, Users, Bell } from 'lucide-react';
+import { UserPlus, Copy, Check, Users, Bell, ChevronUp, ChevronDown } from 'lucide-react';
+import { FaSun, FaMoon } from 'react-icons/fa';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { FriendRequestHandler } from './FriendRequestHandler';
 import './css/ContactList.css';
 
-export const ContactList = ({ contacts, selectedContact, onContactClick, user }) => {
+export const ContactList = ({ contacts, selectedContact, onContactClick, user, onThemeChange, isDark }) => {
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [friendEmail, setFriendEmail] = useState('');
   const [copied, setCopied] = useState(false);
   const [requestStatus, setRequestStatus] = useState({ message: '', type: '' });
   const [userCode, setUserCode] = useState('LOADING...');
+  const [showFooter, setShowFooter] = useState(false);
 
   const db = getFirestore();
 
@@ -65,17 +67,31 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user })
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleThemeChange = () => {
+    const newTheme = !isDark;
+    onThemeChange(newTheme);
+
+    const root = document.documentElement;
+    if (newTheme) {
+      root.style.setProperty('--bg-color', '#040404');
+      root.style.setProperty('--text-color', '#ffffff');
+      root.style.setProperty('--secondary-bg', '#242527');
+      root.style.setProperty('--border-color', '#1f5953');
+      root.style.setProperty('--accent-color', '#128C7E');
+    } else {
+      root.style.setProperty('--bg-color', '#ffffff');
+      root.style.setProperty('--text-color', '#1e293b');
+      root.style.setProperty('--secondary-bg', '#f1f5f9');
+      root.style.setProperty('--border-color', '#e2e8f0');
+      root.style.setProperty('--accent-color', '#3b82f6');
+    }
+  };
+
   return (
-    <div className="contact-list">
+    <div className={`contact-list ${isDark ? 'dark' : 'light'}`}>
       <div className="contact-list-header">
         <h1>Chats</h1>
         <div className="header-actions">
-          <div className="user-code">
-            <span>Your Code: {userCode}</span>
-            <button onClick={copyUserCode} className="copy-button">
-              {copied ? <Check size={16} /> : <Copy size={16} />}
-            </button>
-          </div>
           <button 
             className="friend-requests-button"
             onClick={() => setShowRequests(!showRequests)}
@@ -98,33 +114,31 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user })
         </div>
       )}
 
-      {showAddFriend && (
-        <div className="add-friend-modal">
-          <form onSubmit={handleAddFriend}>
-            <input
-              type="text"
-              placeholder="Enter friend's email or code"
-              value={friendEmail}
-              onChange={(e) => setFriendEmail(e.target.value)}
-              className="friend-input"
+      <div className={`add-friend-modal ${showAddFriend ? 'show' : ''}`}>
+        <form onSubmit={handleAddFriend}>
+          <input
+            type="text"
+            placeholder="Enter friend's email or code"
+            value={friendEmail}
+            onChange={(e) => setFriendEmail(e.target.value)}
+            className="friend-input"
+            disabled={loading}
+          />
+          <div className="modal-buttons">
+            <button type="submit" className="send-request-button" disabled={loading}>
+              {loading ? 'Sending...' : 'Send Request'}
+            </button>
+            <button 
+              type="button" 
+              onClick={() => setShowAddFriend(false)}
+              className="cancel-button"
               disabled={loading}
-            />
-            <div className="modal-buttons">
-              <button type="submit" className="send-request-button" disabled={loading}>
-                {loading ? 'Sending...' : 'Send Request'}
-              </button>
-              <button 
-                type="button" 
-                onClick={() => setShowAddFriend(false)}
-                className="cancel-button"
-                disabled={loading}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
 
       <FriendRequestsModal />
 
@@ -151,14 +165,24 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user })
               className={`contact-item ${selectedContact?.roomID === contact.roomID ? 'selected' : ''}`}
               onClick={() => onContactClick(contact)}
             >
-              <img
-                src={`https://api.dicebear.com/6.x/initials/svg?seed=${contact.name}`}
-                alt={contact.name}
-                className="contact-avatar"
-              />
+              <div className="contact-avatar-container">
+                <img
+                  src={`https://api.dicebear.com/6.x/initials/svg?seed=${contact.name}`}
+                  alt={contact.name}
+                  className="contact-avatar"
+                />
+                {contact.isOnline && <div className="online-indicator"></div>}
+              </div>
               <div className="contact-info">
                 <div className="contact-name-time">
                   <h2>{contact.name}</h2>
+                </div>
+                <div className="contact-status">
+                  {contact.isOnline ? (
+                    <span className="online-text">Online</span>
+                  ) : (
+                    <span className="offline-text">Last seen {contact.lastSeen || 'recently'}</span>
+                  )}
                 </div>
               </div>
               {contact.unreadCount > 0 && (
@@ -167,6 +191,36 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user })
             </div>
           ))
         )}
+      </div>
+
+      <div className="contact-list-footer-container">
+        <button 
+          className={`footer-toggle ${showFooter ? 'open' : ''}`}
+          onClick={() => setShowFooter(!showFooter)}
+        >
+          <ChevronUp size={20} />
+        </button>
+        
+        <div className={`contact-list-footer ${showFooter ? 'show' : ''}`}>
+          <div className="footer-content">
+            <div className="user-code">
+              <span>Code : {userCode}</span>
+              <button onClick={copyUserCode} className="copy-button">
+                {copied ? <Check size={16} /> : <Copy size={16} />}
+              </button>
+            </div>
+            <button
+              onClick={handleThemeChange}
+              className={`theme-toggle-button ${isDark ? 'dark' : 'light'}`}
+              title="Toggle Theme"
+            >
+              <span className={`theme-icon ${isDark ? 'dark' : 'light'}`}>
+                {isDark ? <FaMoon size={18} /> : <FaSun size={18} />}
+              </span>
+              <span className={`theme-text ${isDark ? 'dark' : 'light'}`}>{isDark ? 'Dark' : 'Light'}</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -84,7 +84,12 @@ function ChatContent() {
       console.log('Fetching contacts for user:', user.uid);
       const q = query(collection(db, 'users', user.uid, 'contacts'));
       const unsubscribe = onSnapshot(q, (snapshot) => {
-        const contactsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const contactsData = snapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          ...doc.data(),
+          isOnline: Math.random() > 0.5,
+          lastSeen: Math.random() > 0.5 ? 'yesterday' : '2 hours ago'
+        }));
         console.log('Contacts loaded:', contactsData);
         setContacts(contactsData);
       });
@@ -192,11 +197,13 @@ function ChatContent() {
           selectedContact={selectedContact}
           onContactClick={handleContactClick}
           user={user}
+          onThemeChange={handleThemeChange}
+          isDark={isDark}
         />
         <div className="chat-window">
           {selectedContact ? (
             <>
-              <ChatHeader selectedContact={selectedContact} onThemeChange={handleThemeChange} />
+              <ChatHeader selectedContact={selectedContact} isDark={isDark} />
               <div className="messages-container">
                 <ParticlesBackground />
                 <MessageList
