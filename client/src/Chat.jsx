@@ -203,6 +203,7 @@ function ChatContent() {
                   messages={messages}
                   messagesEndRef={messagesEndRef}
                   handleDocumentClick={handleDocumentClick}
+                  currentUserEmail={user.email}
                 />
               </div>
               {showCamera && (
