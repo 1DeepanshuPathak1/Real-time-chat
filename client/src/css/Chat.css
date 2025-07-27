@@ -121,32 +121,6 @@ body {
   text-align: right;
 }
 
-.poll-message {
-  background-color: #2c2c2c;
-  padding: 12px;
-  border-radius: 12px;
-}
-
-.poll-message h4 {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-color);
-  margin-bottom: 8px;
-}
-
-.poll-message ul {
-  list-style: none;
-  padding: 0;
-}
-
-.poll-message li {
-  padding: 8px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  margin-bottom: 8px;
-  color: var(--text-color);
-}
-
 .message-input-container {
   display: flex;
   align-items: center;

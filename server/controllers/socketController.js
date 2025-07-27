@@ -24,16 +24,6 @@ class SocketController {
                 }
             });
 
-            socket.on('send-poll', async (data) => {
-                const { roomID, poll, sender } = data;
-                try {
-                    await this.roomModel.addMessage(roomID, sender, poll, 'poll');
-                    socket.to(roomID).emit('received-poll', { sender, poll });
-                } catch (error) {
-                    console.error('Error sending poll:', error);
-                }
-            });
-
             socket.on('join-room', async (roomID) => {
                 try {
                     await socket.join(roomID);

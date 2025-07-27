@@ -20,20 +20,6 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
                 <FiFile className="document-icon" />
                 <span>{message.fileName || message.content}</span>
               </div>
-            ) : message.type === 'poll' ? (
-              <div className="poll-message">
-                <h4>{typeof message.content === 'object' ? message.content.question : message.content}</h4>
-                {typeof message.content === 'object' && message.content.options && (
-                  <ul>
-                    {message.content.options.map((option, index) => (
-                      <li key={index}>{option}</li>
-                    ))}
-                  </ul>
-                )}
-                {typeof message.content === 'object' && (
-                  <p>{message.content.allowMultiple ? 'Multiple choice' : 'Single choice'}</p>
-                )}
-              </div>
             ) : (
               <p>{typeof message.content === 'string' ? message.content : JSON.stringify(message.content)}</p>
             )}

@@ -11,7 +11,6 @@ import { MessageList } from './components/MessageComps/MessageList';
 import { EmptyChat } from './components/ContactComps/EmptyChat';
 import { CameraOverlay } from './components/CameraComps/CameraOverlay';
 import { MessageInput } from './components/MessageComps/MessageInput';
-import { PollCreator } from './components/poll-creator';
 import { useCameraHandlers } from './components/CameraComps/CameraHandlers';
 import { useMessageHandlers } from './components/MessageComps/MessageHandlers';
 import { useUserStatus } from './components/UserStatusManager';
@@ -40,7 +39,6 @@ function ChatContent() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
-  const [showPollCreator, setShowPollCreator] = useState(false);
   const [isDark, setIsDark] = useState(true);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -65,10 +63,7 @@ function ChatContent() {
     networkError, 
     joinRoom, 
     leaveRoom, 
-    sendMessage, 
-    sendPoll,
     onMessageReceived,
-    onPollReceived
   } = useSocket();
 
   const { startCamera, captureImage, stopCamera, stream } = useCameraHandlers(setMessages, videoRef, selectedContact);
@@ -264,15 +259,10 @@ function ChatContent() {
       console.log('Received real-time message:', data);
     });
 
-    const unsubscribePoll = onPollReceived((data) => {
-      console.log('Received real-time poll:', data);
-    });
-
     return () => {
       if (unsubscribeMessage) unsubscribeMessage();
-      if (unsubscribePoll) unsubscribePoll();
     };
-  }, [onMessageReceived, onPollReceived]);
+  }, [onMessageReceived]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -289,24 +279,6 @@ function ChatContent() {
       leaveRoom(selectedContact.roomID);
     }
     setSelectedContact(contact);
-  };
-
-  const handlePollSend = async (pollData) => {
-    if (selectedContact && user && isConnected) {
-      const newPoll = {
-        sender: user.email,
-        content: pollData,
-        time: new Date().toISOString(),
-        type: 'poll'
-      };
-
-      try {
-        await addDoc(collection(db, 'rooms', selectedContact.roomID, 'messages'), newPoll);
-        sendPoll(selectedContact.roomID, pollData, user.email);
-      } catch (error) {
-        console.error('Error sending poll:', error);
-      }
-    }
   };
 
   const handleDocumentClick = (fileUrl) => {
@@ -388,12 +360,6 @@ function ChatContent() {
                   stream={stream}
                 />
               )}
-              {showPollCreator && (
-                <PollCreator
-                  onClose={() => setShowPollCreator(false)}
-                  onSend={handlePollSend}
-                />
-              )}
               <MessageInput
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -414,7 +380,6 @@ function ChatContent() {
                   setShowCamera(true);
                   setShowAttachMenu(false);
                 }}
-                setShowPollCreator={setShowPollCreator}
               />
               <EmojiPickerComponent
                 theme={isDark ? 'dark' : 'light'}

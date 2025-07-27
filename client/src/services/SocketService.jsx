@@ -22,7 +22,7 @@ export const SocketProvider = ({ children, user }) => {
       console.log('Initializing socket connection for user:', user.uid);
       
       const newSocket = io('https://chat-app-server-uwpx.onrender.com', {
-        transports: ['websocket', 'polling'],
+        transports: ['websocket'],
         path: '/socket.io',
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
@@ -90,23 +90,10 @@ export const SocketProvider = ({ children, user }) => {
     }
   };
 
-  const sendPoll = (roomId, poll, sender) => {
-    if (socket && isConnected) {
-      socket.emit('send-poll', { roomID: roomId, poll, sender });
-    }
-  };
-
   const onMessageReceived = (callback) => {
     if (socket) {
       socket.on('received-message', callback);
       return () => socket.off('received-message', callback);
-    }
-  };
-
-  const onPollReceived = (callback) => {
-    if (socket) {
-      socket.on('received-poll', callback);
-      return () => socket.off('received-poll', callback);
     }
   };
 
@@ -138,9 +125,7 @@ export const SocketProvider = ({ children, user }) => {
     joinRoom,
     leaveRoom,
     sendMessage,
-    sendPoll,
     onMessageReceived,
-    onPollReceived,
     onFriendRequestReceived,
     onFriendRequestResponded,
     onFriendRequestAccepted

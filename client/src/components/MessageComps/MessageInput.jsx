@@ -13,8 +13,7 @@ export const MessageInput = ({
   setShowAttachMenu,
   fileInputRef,
   documentInputRef,
-  startCamera,
-  setShowPollCreator
+  startCamera
 }) => {
   return (
     <form onSubmit={onSubmit} className="message-input-container">
@@ -53,13 +52,6 @@ export const MessageInput = ({
           <button onClick={() => documentInputRef.current?.click()}>
             <FiFile />
             <span>Document</span>
-          </button>
-          <button onClick={() => {
-            setShowAttachMenu(false);
-            setShowPollCreator(true);
-          }}>
-            <FiBarChart2 />
-            <span>Poll</span>
           </button>
         </div>
       )}
