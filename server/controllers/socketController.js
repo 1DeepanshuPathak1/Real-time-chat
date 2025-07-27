@@ -42,6 +42,14 @@ class SocketController {
                 }
             });
 
+            socket.on('mark-messages-read', (data) => {
+                socket.to(data.roomId).emit('message-read', {
+                    userId: data.userId,
+                    roomId: data.roomId,
+                    timestamp: data.timestamp
+                });
+            });
+
             socket.on('disconnect', () => {
                 console.log('Socket disconnected:', socket.id);
             });
