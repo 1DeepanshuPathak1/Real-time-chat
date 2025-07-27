@@ -3,8 +3,8 @@ import { UserPlus, Copy, Check, Users, Bell, ChevronUp, ChevronDown } from 'luci
 import { FaSun, FaMoon } from 'react-icons/fa';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 import { FriendRequestHandler } from './FriendRequestHandler';
-import { useContactStatus } from './UserStatusManager';
-import './css/ContactList.css';
+import { useContactStatus } from '../UserStatusManager';
+import '../css/ContactList.css';
 
 const ContactItem = ({ contact, selectedContact, onContactClick, handleContactClick }) => {
   const status = useContactStatus(contact);

@@ -1,6 +1,6 @@
 import React from 'react';
-import { useContactStatus } from './UserStatusManager';
-import './css/ChatHeader.css';
+import { useContactStatus } from '../UserStatusManager';
+import '../css/ChatHeader.css';
 
 export const ChatHeader = ({ selectedContact, isDark }) => {
   const status = useContactStatus(selectedContact);

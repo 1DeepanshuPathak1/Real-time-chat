@@ -147,13 +147,13 @@ export const useContactStatus = (contact) => {
 };
 
 const formatLastSeen = (timestamp) => {
-  if (!timestamp) return 'recently';
+  if (!timestamp) return 'Seen recently';
 
   try {
     const now = new Date();
     const lastSeen = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     
-    if (isNaN(lastSeen.getTime())) return 'recently';
+    if (isNaN(lastSeen.getTime())) return 'Seen recently';
     
     const diffInMs = now - lastSeen;
     const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
@@ -161,8 +161,8 @@ const formatLastSeen = (timestamp) => {
     const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
 
     if (diffInMinutes < 1) return 'just now';
-    if (diffInMinutes < 2) return 'recently';
-    if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`;
+    if (diffInMinutes < 2) return 'Seen recently';
+    if (diffInMinutes < 60) return `Active ${diffInMinutes} minutes ago`;
     
     if (diffInHours < 24) {
       return `last seen at ${lastSeen.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
@@ -186,6 +186,6 @@ const formatLastSeen = (timestamp) => {
     return `last seen ${months} months ago`;
   } catch (error) {
     console.error('Error formatting last seen:', error);
-    return 'recently';
+    return 'Seen recently';
   }
 };
