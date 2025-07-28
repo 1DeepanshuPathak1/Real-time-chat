@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getFirestore, doc, onSnapshot, updateDoc, serverTimestamp, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { getFirestore, doc, onSnapshot, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 
 const db = getFirestore();
+
+const userStatusCache = new Map();
 
 export const useUserStatus = (user) => {
   const [isTabVisible, setIsTabVisible] = useState(!document.hidden);
@@ -11,14 +13,21 @@ export const useUserStatus = (user) => {
     
     try {
       const userRef = doc(db, 'users', user.uid);
-      await setDoc(userRef, {
+      const timestamp = Date.now();
+      
+      await updateDoc(userRef, {
         isOnline: true,
         isTabActive: isVisible,
-        lastSeen: serverTimestamp(),
-        lastSeenTimestamp: Date.now(),
+        lastSeenTimestamp: timestamp,
         email: user.email,
         uid: user.uid
-      }, { merge: true });
+      });
+
+      userStatusCache.set(user.email, {
+        isOnline: true,
+        isTabActive: isVisible,
+        lastSeenTimestamp: timestamp
+      });
     } catch (error) {
       console.error('Error setting user online:', error);
     }
@@ -29,32 +38,46 @@ export const useUserStatus = (user) => {
     
     try {
       const userRef = doc(db, 'users', user.uid);
+      const timestamp = Date.now();
+      
       await updateDoc(userRef, {
         isOnline: false,
         isTabActive: false,
-        activeRoom: null,
-        isInChat: false,
-        lastSeen: serverTimestamp(),
-        lastSeenTimestamp: Date.now()
+        lastSeenTimestamp: timestamp
+      });
+
+      userStatusCache.set(user.email, {
+        isOnline: false,
+        isTabActive: false,
+        lastSeenTimestamp: timestamp
       });
     } catch (error) {
       console.error('Error setting user offline:', error);
     }
-  }, [user?.uid]);
+  }, [user?.uid, user?.email]);
 
   const updateTabVisibility = useCallback(async (isVisible) => {
     if (!user?.uid) return;
     
     try {
       const userRef = doc(db, 'users', user.uid);
+      const timestamp = Date.now();
+      
       await updateDoc(userRef, {
         isTabActive: isVisible,
-        lastSeenTimestamp: Date.now()
+        lastSeenTimestamp: timestamp
+      });
+
+      const cachedStatus = userStatusCache.get(user.email) || {};
+      userStatusCache.set(user.email, {
+        ...cachedStatus,
+        isTabActive: isVisible,
+        lastSeenTimestamp: timestamp
       });
     } catch (error) {
       console.error('Error updating tab visibility:', error);
     }
-  }, [user?.uid]);
+  }, [user?.uid, user?.email]);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -125,6 +148,18 @@ export const useContactStatus = (contact) => {
       return;
     }
 
+    const cachedStatus = userStatusCache.get(contact.email);
+    if (cachedStatus) {
+      const isOnline = cachedStatus.isOnline === true && cachedStatus.isTabActive === true;
+      if (isOnline) {
+        setStatus({ isOnline: true, lastSeen: 'Online' });
+      } else {
+        const formattedLastSeen = formatLastSeen(cachedStatus.lastSeenTimestamp);
+        setStatus({ isOnline: false, lastSeen: formattedLastSeen });
+      }
+      return;
+    }
+
     const findUserByEmail = async () => {
       try {
         const usersRef = collection(db, 'users');
@@ -136,12 +171,17 @@ export const useContactStatus = (contact) => {
           const userData = { id: userDoc.id, ...userDoc.data() };
           setContactData(userData);
           
+          userStatusCache.set(contact.email, {
+            isOnline: userData.isOnline,
+            isTabActive: userData.isTabActive,
+            lastSeenTimestamp: userData.lastSeenTimestamp
+          });
+          
           const isOnline = userData.isOnline === true && userData.isTabActive === true;
           if (isOnline) {
             setStatus({ isOnline: true, lastSeen: 'Online' });
           } else {
-            const lastSeenTimestamp = userData.lastSeen;
-            const formattedLastSeen = formatLastSeen(lastSeenTimestamp);
+            const formattedLastSeen = formatLastSeen(userData.lastSeenTimestamp);
             setStatus({ isOnline: false, lastSeen: formattedLastSeen });
           }
         } else {
@@ -168,13 +208,19 @@ export const useContactStatus = (contact) => {
     const unsubscribe = onSnapshot(userRef, (docSnapshot) => {
       if (docSnapshot.exists()) {
         const userData = docSnapshot.data();
+        
+        userStatusCache.set(contact.email, {
+          isOnline: userData.isOnline,
+          isTabActive: userData.isTabActive,
+          lastSeenTimestamp: userData.lastSeenTimestamp
+        });
+        
         const isOnline = userData.isOnline === true && userData.isTabActive === true;
         
         if (isOnline) {
           setStatus({ isOnline: true, lastSeen: 'Online' });
         } else {
-          const lastSeenTimestamp = userData.lastSeen;
-          const formattedLastSeen = formatLastSeen(lastSeenTimestamp);
+          const formattedLastSeen = formatLastSeen(userData.lastSeenTimestamp);
           setStatus({ isOnline: false, lastSeen: formattedLastSeen });
         }
       } else {
@@ -186,7 +232,7 @@ export const useContactStatus = (contact) => {
     });
 
     return () => unsubscribe();
-  }, [contactData?.id]);
+  }, [contactData?.id, contact?.email]);
 
   return status;
 };
@@ -196,7 +242,7 @@ const formatLastSeen = (timestamp) => {
 
   try {
     const now = new Date();
-    const lastSeen = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const lastSeen = new Date(timestamp);
     
     if (isNaN(lastSeen.getTime())) return 'Seen recently';
     

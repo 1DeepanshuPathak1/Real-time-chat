@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { getFirestore, doc, onSnapshot, collection, query, where, getDocs, updateDoc, setDoc } from 'firebase/firestore';
+import { getFirestore, doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { useSocket } from '../../services/SocketService';
 import './css/MessageStatus.css';
 
 const db = getFirestore();
+
+const userStatusCache = new Map();
 
 export const MessageStatusIndicator = ({ message, currentUser, selectedContact }) => {
   const [status, setStatus] = useState('sent');
@@ -15,76 +17,71 @@ export const MessageStatusIndicator = ({ message, currentUser, selectedContact }
   useEffect(() => {
     if (!message || !selectedContact || !currentUser) return;
 
-    let contactStatusUnsubscribe = null;
-    let messageStatusUnsubscribe = null;
-
-    const initializeMessageStatus = async () => {
+    const checkMessageStatus = async () => {
       try {
-        const messageStatusRef = doc(db, 'messageStatus', `${selectedContact.roomID}_${message.id}`);
+        if (message.isRead) {
+          setStatus('read');
+          return;
+        }
         
-        messageStatusUnsubscribe = onSnapshot(messageStatusRef, (docSnapshot) => {
-          if (docSnapshot.exists()) {
-            const statusData = docSnapshot.data();
-            if (statusData.isRead) {
-              setStatus('read');
-              return;
-            }
-            if (statusData.isDelivered) {
-              setStatus('delivered');
-              return;
-            }
-          }
-          
+        if (message.isDelivered) {
+          setStatus('delivered');
+          return;
+        }
+
+        const contactEmail = selectedContact.email;
+        let contactStatus = userStatusCache.get(contactEmail);
+        
+        if (!contactStatus) {
           const usersRef = collection(db, 'users');
-          const q = query(usersRef, where('email', '==', selectedContact.email));
-          getDocs(q).then(querySnapshot => {
-            if (!querySnapshot.empty) {
-              const contactDoc = querySnapshot.docs[0];
-              
-              contactStatusUnsubscribe = onSnapshot(doc(db, 'users', contactDoc.id), (userSnapshot) => {
-                if (userSnapshot.exists()) {
-                  const contactData = userSnapshot.data();
-                  
-                  if (contactData.isOnline && contactData.lastSeenTimestamp > new Date(message.timestamp).getTime()) {
-                    setDoc(messageStatusRef, {
-                      messageId: message.id,
-                      roomId: selectedContact.roomID,
-                      isDelivered: true,
-                      deliveredAt: new Date().toISOString()
-                    }, { merge: true });
-                    setStatus('delivered');
-                  }
-                }
-              });
-            }
-          });
-        });
+          const q = query(usersRef, where('email', '==', contactEmail));
+          const querySnapshot = await getDocs(q);
+          
+          if (!querySnapshot.empty) {
+            const contactData = querySnapshot.docs[0].data();
+            contactStatus = {
+              isOnline: contactData.isOnline,
+              lastSeenTimestamp: contactData.lastSeenTimestamp
+            };
+            userStatusCache.set(contactEmail, contactStatus);
+          }
+        }
+
+        if (contactStatus) {
+          const messageTimestamp = new Date(message.timestamp).getTime();
+          
+          if (contactStatus.isOnline && contactStatus.lastSeenTimestamp > messageTimestamp) {
+            const messageRef = doc(db, 'rooms', selectedContact.roomID, 'messages', message.id);
+            await updateDoc(messageRef, {
+              isDelivered: true,
+              deliveredAt: new Date().toISOString()
+            });
+            setStatus('delivered');
+          }
+        }
 
       } catch (error) {
-        console.error('Error initializing message status:', error);
+        console.error('Error checking message status:', error);
+        setStatus('sent');
       }
     };
 
-    initializeMessageStatus();
+    checkMessageStatus();
 
-    return () => {
-      if (contactStatusUnsubscribe) contactStatusUnsubscribe();
-      if (messageStatusUnsubscribe) messageStatusUnsubscribe();
-    };
+    const interval = setInterval(checkMessageStatus, 2000);
+    return () => clearInterval(interval);
   }, [message, selectedContact, currentUser]);
 
   useEffect(() => {
     if (socket && selectedContact && message) {
       const handleMessageRead = async (data) => {
         if (data.roomId === selectedContact.roomID && data.messageIds.includes(message.id)) {
-          const messageStatusRef = doc(db, 'messageStatus', `${selectedContact.roomID}_${message.id}`);
-          await setDoc(messageStatusRef, {
-            messageId: message.id,
-            roomId: selectedContact.roomID,
+          const messageRef = doc(db, 'rooms', selectedContact.roomID, 'messages', message.id);
+          await updateDoc(messageRef, {
             isDelivered: true,
             isRead: true,
             readAt: new Date().toISOString()
-          }, { merge: true });
+          });
           setStatus('read');
         }
       };

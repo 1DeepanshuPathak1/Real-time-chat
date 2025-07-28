@@ -10,7 +10,7 @@ import '../css/ContactList.css';
 const ContactItem = ({ contact, selectedContact, onContactClick, handleContactClick }) => {
   const status = useContactStatus(contact);
   const unreadCount = contact.unreadCount || contact.unreadMessages || 0;
-  
+
   return (
     <div
       key={contact.id}
@@ -58,7 +58,7 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
   const [requestStatus, setRequestStatus] = useState({ message: '', type: '' });
   const [userCode, setUserCode] = useState('LOADING...');
   const [showFooter, setShowFooter] = useState(false);
-  
+
   const footerStateRef = useRef(showFooter);
   const db = getFirestore();
 
@@ -72,20 +72,16 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
         try {
           const userDocRef = doc(db, 'users', user.uid);
           const userDoc = await getDoc(userDocRef);
-          
+
           if (userDoc.exists()) {
             const userData = userDoc.data();
             if (userData.userCode) {
               setUserCode(userData.userCode);
             } else {
               const newUserCode = generateUserCode();
-              await setDoc(userDocRef, {
-                userCode: newUserCode,
-                email: user.email,
-                uid: user.uid,
-                isOnline: true,
-                lastSeen: new Date().toISOString()
-              }, { merge: true });
+              await updateDoc(userDocRef, {
+                userCode: newUserCode
+              });
               setUserCode(newUserCode);
             }
           } else {
@@ -95,7 +91,7 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
               email: user.email,
               uid: user.uid,
               isOnline: true,
-              lastSeen: new Date().toISOString()
+              lastSeenTimestamp: Date.now()
             });
             setUserCode(newUserCode);
           }
@@ -107,7 +103,7 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
     };
 
     fetchOrCreateUserCode();
-  }, [user?.uid, user?.email, db]);
+  }, [user?.uid, user?.email]);
 
   const {
     showRequests,
@@ -126,12 +122,12 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
         message: result.message,
         type: result.success ? 'success' : 'error'
       });
-      
+
       if (result.success) {
         setFriendEmail('');
         setShowAddFriend(false);
       }
-      
+
       setTimeout(() => setRequestStatus({ message: '', type: '' }), 3000);
     }
   }, [friendEmail, sendFriendRequest]);
@@ -175,14 +171,14 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
       <div className="contact-list-header">
         <h1>Chats</h1>
         <div className="header-actions">
-          <button 
+          <button
             className="friend-requests-button"
             onClick={() => setShowRequests(!showRequests)}
           >
             <Bell size={20} />
             <FriendRequestBadge />
           </button>
-          <button 
+          <button
             className="add-friend-button"
             onClick={() => setShowAddFriend(!showAddFriend)}
           >
@@ -211,8 +207,8 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
             <button type="submit" className="send-request-button" disabled={loading}>
               {loading ? 'Sending...' : 'Send Request'}
             </button>
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => setShowAddFriend(false)}
               className="cancel-button"
               disabled={loading}
@@ -233,7 +229,7 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
             </div>
             <h3>No friends yet!</h3>
             <p>Share your code <strong>{userCode}</strong> with friends or add them using their email/code.</p>
-            <button 
+            <button
               className="add-first-friend"
               onClick={() => setShowAddFriend(true)}
             >
@@ -255,13 +251,13 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
       </div>
 
       <div className="contact-list-footer-container">
-        <button 
+        <button
           className={`footer-toggle ${showFooter ? 'open' : ''}`}
           onClick={handleFooterToggle}
         >
           <ChevronUp size={20} />
         </button>
-        
+
         <div className={`contact-list-footer ${showFooter ? 'show' : ''}`}>
           <div className="footer-content">
             <div className="user-code">

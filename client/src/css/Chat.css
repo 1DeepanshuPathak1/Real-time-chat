@@ -501,3 +501,39 @@ body {
 .messages-container::-webkit-scrollbar-thumb:hover {
   background: rgba(18, 140, 126, 0.5);
 }
+
+.messages-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(18, 140, 126, 0.5);
+}
+
+.unread-messages-divider {
+  display: flex;
+  align-items: center;
+  margin: 20px 0;
+  padding: 0 20px;
+  position: relative;
+  z-index: 10;
+}
+
+.unread-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #ef4444, transparent);
+  opacity: 0.8;
+}
+
+.unread-text {
+  color: #ef4444;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 12px;
+  margin: 0 10px;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  backdrop-filter: blur(5px);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
+}

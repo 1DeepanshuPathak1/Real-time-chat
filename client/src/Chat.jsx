@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, query, onSnapshot, addDoc, orderBy, limit, startAfter, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, query, onSnapshot, addDoc, orderBy, limit, startAfter, getDocs, where, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { SocketProvider, useSocket } from './services/SocketService';
 import { EmojiPickerComponent } from './components/MessageComps/EmojiPicker';
 import { ParticlesBackground } from './components/MessageComps/ParticlesBackground';
@@ -48,6 +48,8 @@ function ChatContent() {
   const [pullDistance, setPullDistance] = useState(0);
   const [isPulling, setIsPulling] = useState(false);
   const [showStartMessage, setShowStartMessage] = useState(false);
+  const [hasScrolledToUnread, setHasScrolledToUnread] = useState(false);
+  const [firstUnreadIndex, setFirstUnreadIndex] = useState(-1);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -84,15 +86,63 @@ function ChatContent() {
     return () => unsubscribe();
   }, [navigate]);
 
+  const getUnreadCount = async (contact) => {
+    if (!user || !contact.roomID) return 0;
+    
+    try {
+      const roomRef = doc(db, 'rooms', contact.roomID);
+      const roomDoc = await getDoc(roomRef);
+      const lastReadTimestamp = roomDoc.data()?.[`lastReadBy_${user.uid}`] || 0;
+      
+      const messagesRef = collection(db, 'rooms', contact.roomID, 'messages');
+      const messagesQuery = query(messagesRef, orderBy('time', 'desc'));
+      const snapshot = await getDocs(messagesQuery);
+      
+      let unreadCount = 0;
+      snapshot.docs.forEach(doc => {
+        const messageData = doc.data();
+        if (messageData.sender !== user.email) {
+          const messageTimestamp = new Date(messageData.time).getTime();
+          if (messageTimestamp > lastReadTimestamp) {
+            unreadCount++;
+          }
+        }
+      });
+      
+      return unreadCount;
+    } catch (error) {
+      console.error('Error calculating unread count:', error);
+      return 0;
+    }
+  };
+
   useEffect(() => {
     if (user) {
       const q = query(collection(db, 'users', user.uid, 'contacts'));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const contactsData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setContacts(contactsData);
+      const unsubscribe = onSnapshot(q, async (snapshot) => {
+        const contactsData = await Promise.all(
+          snapshot.docs.map(async (doc) => {
+            const contactData = { id: doc.id, ...doc.data() };
+            const unreadCount = await getUnreadCount(contactData);
+            
+            const lastMessageQuery = query(
+              collection(db, 'rooms', contactData.roomID, 'messages'),
+              orderBy('time', 'desc'),
+              limit(1)
+            );
+            const lastMessageSnapshot = await getDocs(lastMessageQuery);
+            const lastMessageTime = lastMessageSnapshot.docs[0]?.data()?.time || 0;
+            
+            return {
+              ...contactData,
+              unreadCount,
+              lastMessageTime: new Date(lastMessageTime).getTime()
+            };
+          })
+        );
+        
+        const sortedContacts = contactsData.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
+        setContacts(sortedContacts);
       });
 
       return () => unsubscribe();
@@ -104,6 +154,8 @@ function ChatContent() {
       console.log('Joining room:', selectedContact.roomID);
       joinRoom(selectedContact.roomID);
 
+      setHasScrolledToUnread(false);
+      setFirstUnreadIndex(-1);
       setMessages([]);
       setOldestMessage(null);
       setHasMoreMessages(true);
@@ -250,24 +302,138 @@ function ChatContent() {
   };
 
   useEffect(() => {
-    const unsubscribeMessage = onMessageReceived((data) => {
+    const updateContactsRealTime = () => {
+      if (!user) return;
+      
+      const allRoomsQuery = query(collection(db, 'rooms'));
+      const unsubscribeRooms = onSnapshot(allRoomsQuery, () => {
+        const contactsQuery = query(collection(db, 'users', user.uid, 'contacts'));
+        getDocs(contactsQuery).then(async (contactsSnapshot) => {
+          const updatedContacts = await Promise.all(
+            contactsSnapshot.docs.map(async (doc) => {
+              const contactData = { id: doc.id, ...doc.data() };
+              const unreadCount = await getUnreadCount(contactData);
+              
+              const lastMessageQuery = query(
+                collection(db, 'rooms', contactData.roomID, 'messages'),
+                orderBy('time', 'desc'),
+                limit(1)
+              );
+              const lastMessageSnapshot = await getDocs(lastMessageQuery);
+              const lastMessageTime = lastMessageSnapshot.docs[0]?.data()?.time || 0;
+              
+              return {
+                ...contactData,
+                unreadCount,
+                lastMessageTime: new Date(lastMessageTime).getTime()
+              };
+            })
+          );
+          
+          const sortedContacts = updatedContacts.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
+          setContacts(sortedContacts);
+        });
+      });
+
+      return unsubscribeRooms;
+    };
+
+    if (user) {
+      const unsubscribeRealTime = updateContactsRealTime();
+      return () => {
+        if (unsubscribeRealTime) unsubscribeRealTime();
+      };
+    }
+  }, [user]);
+
+  useEffect(() => {
+    const unsubscribeMessage = onMessageReceived(async (data) => {
       console.log('Received real-time message:', data);
+      
+      if (user) {
+        const contactsQuery = query(collection(db, 'users', user.uid, 'contacts'));
+        const contactsSnapshot = await getDocs(contactsQuery);
+        const updatedContacts = await Promise.all(
+          contactsSnapshot.docs.map(async (doc) => {
+            const contactData = { id: doc.id, ...doc.data() };
+            const unreadCount = await getUnreadCount(contactData);
+            
+            const lastMessageQuery = query(
+              collection(db, 'rooms', contactData.roomID, 'messages'),
+              orderBy('time', 'desc'),
+              limit(1)
+            );
+            const lastMessageSnapshot = await getDocs(lastMessageQuery);
+            const lastMessageTime = lastMessageSnapshot.docs[0]?.data()?.time || 0;
+            
+            return {
+              ...contactData,
+              unreadCount,
+              lastMessageTime: new Date(lastMessageTime).getTime()
+            };
+          })
+        );
+        
+        const sortedContacts = updatedContacts.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
+        setContacts(sortedContacts);
+      }
     });
 
     return () => {
       if (unsubscribeMessage) unsubscribeMessage();
     };
-  }, [onMessageReceived]);
+  }, [onMessageReceived, user]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const scrollToFirstUnreadMessage = useCallback(async () => {
+    if (!selectedContact || !user || messages.length === 0 || hasScrolledToUnread) return;
+    
+    try {
+      const roomRef = doc(db, 'rooms', selectedContact.roomID);
+      const roomDoc = await getDoc(roomRef);
+      const lastReadTimestamp = roomDoc.data()?.[`lastReadBy_${user.uid}`] || 0;
+      
+      const firstUnreadIdx = messages.findIndex(msg => 
+        msg.sender !== user.email && 
+        new Date(msg.timestamp).getTime() > lastReadTimestamp
+      );
+      
+      setFirstUnreadIndex(firstUnreadIdx);
+      
+      if (firstUnreadIdx !== -1) {
+        setTimeout(() => {
+          const messageElements = document.querySelectorAll('.message');
+          const firstUnreadElement = messageElements[firstUnreadIdx];
+          if (firstUnreadElement) {
+            firstUnreadElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setHasScrolledToUnread(true);
+          }
+        }, 300);
+      } else {
+        setTimeout(() => {
+          scrollToBottom();
+          setHasScrolledToUnread(true);
+        }, 300);
+      }
+    } catch (error) {
+      console.error('Error scrolling to first unread:', error);
+      setTimeout(() => {
+        scrollToBottom();
+        setHasScrolledToUnread(true);
+      }, 300);
+    }
+  }, [selectedContact, user, messages, hasScrolledToUnread]);
+
   useEffect(() => {
-    if (messages.length > 0 && !loadingOlderMessages) {
+    if (messages.length > 0 && !loadingOlderMessages && selectedContact && !hasScrolledToUnread) {
+      scrollToFirstUnreadMessage();
+    } else if (messages.length > 0 && !loadingOlderMessages && hasScrolledToUnread && messages[messages.length - 1]?.sender === user?.email) {
       scrollToBottom();
     }
-  }, [messages, loadingOlderMessages]);
+  }, [messages, loadingOlderMessages, selectedContact, hasScrolledToUnread, scrollToFirstUnreadMessage, user]);
 
   const handleContactClick = (contact) => {
     if (selectedContact && isConnected) {
@@ -344,6 +510,7 @@ function ChatContent() {
                   currentUserEmail={user.email}
                   selectedContact={selectedContact}
                   user={user}
+                  firstUnreadIndex={firstUnreadIndex}
                 />
               </div>
               {showCamera && (
