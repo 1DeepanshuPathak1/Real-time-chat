@@ -44,10 +44,10 @@ class SocketController {
 
             socket.on('mark-messages-read', (data) => {
                 socket.to(data.roomId).emit('message-read', {
-                    userId: data.userId,
-                    userEmail: data.userEmail,
                     roomId: data.roomId,
-                    timestamp: data.timestamp
+                    messageIds: data.messageIds,
+                    readBy: data.userEmail,
+                    readTimestamp: data.readTimestamp
                 });
             });
 
