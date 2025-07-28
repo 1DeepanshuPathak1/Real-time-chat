@@ -24,13 +24,13 @@ class SocketController {
                 }
             });
 
-            socket.on('join-room', async (roomID) => {
-                try {
-                    await socket.join(roomID);
-                    socket.emit('joined-room', { roomID, socketID: socket.id });
-                } catch (error) {
-                    console.error('Error joining room:', error);
-                }
+            socket.on('join-room', (roomId) => {
+                socket.join(roomId);
+                socket.to(roomId).emit('user-joined-room', {
+                    roomId: roomId,
+                    userEmail: socket.userEmail || socket.email,
+                    userId: socket.userId
+                });
             });
 
             socket.on('leave-room', async (roomID) => {
@@ -45,6 +45,7 @@ class SocketController {
             socket.on('mark-messages-read', (data) => {
                 socket.to(data.roomId).emit('message-read', {
                     userId: data.userId,
+                    userEmail: data.userEmail,
                     roomId: data.roomId,
                     timestamp: data.timestamp
                 });
