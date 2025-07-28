@@ -4,14 +4,18 @@ import { getFirestore, doc, onSnapshot, updateDoc, serverTimestamp, setDoc, coll
 const db = getFirestore();
 
 export const useUserStatus = (user) => {
-  const setOnline = useCallback(async () => {
+  const [isTabVisible, setIsTabVisible] = useState(!document.hidden);
+
+  const setOnline = useCallback(async (isVisible = true) => {
     if (!user?.uid) return;
     
     try {
       const userRef = doc(db, 'users', user.uid);
       await setDoc(userRef, {
         isOnline: true,
+        isTabActive: isVisible,
         lastSeen: serverTimestamp(),
+        lastSeenTimestamp: Date.now(),
         email: user.email,
         uid: user.uid
       }, { merge: true });
@@ -27,46 +31,87 @@ export const useUserStatus = (user) => {
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, {
         isOnline: false,
-        lastSeen: serverTimestamp()
+        isTabActive: false,
+        activeRoom: null,
+        isInChat: false,
+        lastSeen: serverTimestamp(),
+        lastSeenTimestamp: Date.now()
       });
     } catch (error) {
       console.error('Error setting user offline:', error);
     }
   }, [user?.uid]);
 
+  const updateTabVisibility = useCallback(async (isVisible) => {
+    if (!user?.uid) return;
+    
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        isTabActive: isVisible,
+        lastSeenTimestamp: Date.now()
+      });
+    } catch (error) {
+      console.error('Error updating tab visibility:', error);
+    }
+  }, [user?.uid]);
+
   useEffect(() => {
     if (!user?.uid) return;
 
-    setOnline();
+    setOnline(isTabVisible);
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        setTimeout(() => setOnline(), 100);
+      const isVisible = !document.hidden;
+      setIsTabVisible(isVisible);
+      
+      if (isVisible) {
+        setOnline(true);
+      } else {
+        updateTabVisibility(false);
       }
+    };
+
+    const handleFocus = () => {
+      setIsTabVisible(true);
+      setOnline(true);
+    };
+
+    const handleBlur = () => {
+      setIsTabVisible(false);
+      updateTabVisibility(false);
     };
 
     const handleBeforeUnload = () => {
       setOffline();
     };
 
+    const handlePageHide = () => {
+      setOffline();
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
     window.addEventListener('beforeunload', handleBeforeUnload);
-    window.addEventListener('pagehide', handleBeforeUnload);
+    window.addEventListener('pagehide', handlePageHide);
 
     const statusInterval = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        setOnline();
+        setOnline(true);
       }
-    }, 15000);
+    }, 30000);
 
     return () => {
       clearInterval(statusInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('blur', handleBlur);
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('pagehide', handleBeforeUnload);
+      window.removeEventListener('pagehide', handlePageHide);
       setOffline();
     };
-  }, [user?.uid, setOnline, setOffline]);
+  }, [user?.uid, setOnline, setOffline, updateTabVisibility, isTabVisible]);
 };
 
 export const useContactStatus = (contact) => {
@@ -91,7 +136,7 @@ export const useContactStatus = (contact) => {
           const userData = { id: userDoc.id, ...userDoc.data() };
           setContactData(userData);
           
-          const isOnline = userData.isOnline === true;
+          const isOnline = userData.isOnline === true && userData.isTabActive === true;
           if (isOnline) {
             setStatus({ isOnline: true, lastSeen: 'Online' });
           } else {
@@ -123,7 +168,7 @@ export const useContactStatus = (contact) => {
     const unsubscribe = onSnapshot(userRef, (docSnapshot) => {
       if (docSnapshot.exists()) {
         const userData = docSnapshot.data();
-        const isOnline = userData.isOnline === true;
+        const isOnline = userData.isOnline === true && userData.isTabActive === true;
         
         if (isOnline) {
           setStatus({ isOnline: true, lastSeen: 'Online' });

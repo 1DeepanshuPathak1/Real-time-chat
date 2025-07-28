@@ -57,12 +57,12 @@ function ChatContent() {
 
   useUserStatus(user);
 
-  const { 
-    socket, 
-    isConnected, 
-    networkError, 
-    joinRoom, 
-    leaveRoom, 
+  const {
+    socket,
+    isConnected,
+    networkError,
+    joinRoom,
+    leaveRoom,
     onMessageReceived,
   } = useSocket();
 
@@ -88,8 +88,8 @@ function ChatContent() {
     if (user) {
       const q = query(collection(db, 'users', user.uid, 'contacts'));
       const unsubscribe = onSnapshot(q, (snapshot) => {
-        const contactsData = snapshot.docs.map(doc => ({ 
-          id: doc.id, 
+        const contactsData = snapshot.docs.map(doc => ({
+          id: doc.id,
           ...doc.data()
         }));
         setContacts(contactsData);
@@ -118,27 +118,27 @@ function ChatContent() {
             orderBy('time', 'desc'),
             limit(50)
           );
-          
+
           const snapshot = await getDocs(q);
-          const messagesData = snapshot.docs.map(doc => ({ 
-            id: doc.id, 
+          const messagesData = snapshot.docs.map(doc => ({
+            id: doc.id,
             ...doc.data(),
             time: new Date(doc.data().time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             timestamp: doc.data().time
           }));
-          
+
           const sortedMessages = messagesData.reverse();
           console.log('Initial messages loaded:', sortedMessages.length);
           setMessages(sortedMessages);
-          
+
           if (messagesData.length > 0) {
             setOldestMessage(snapshot.docs[snapshot.docs.length - 1]);
-            
+
             const realtimeQ = query(
               collection(db, 'rooms', selectedContact.roomID, 'messages'),
               orderBy('time', 'asc')
             );
-            
+
             const unsubscribe = onSnapshot(realtimeQ, (realtimeSnapshot) => {
               const allMessages = realtimeSnapshot.docs.map(doc => ({
                 id: doc.id,
@@ -146,17 +146,17 @@ function ChatContent() {
                 time: new Date(doc.data().time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 timestamp: doc.data().time
               }));
-              
+
               setMessages(allMessages);
             });
-            
+
             return unsubscribe;
           } else {
             const realtimeQ = query(
               collection(db, 'rooms', selectedContact.roomID, 'messages'),
               orderBy('time', 'asc')
             );
-            
+
             const unsubscribe = onSnapshot(realtimeQ, (realtimeSnapshot) => {
               const allMessages = realtimeSnapshot.docs.map(doc => ({
                 id: doc.id,
@@ -164,16 +164,11 @@ function ChatContent() {
                 time: new Date(doc.data().time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 timestamp: doc.data().time
               }));
-              
+
               setMessages(allMessages);
             });
-            
+
             return unsubscribe;
-          }
-          
-          if (messagesData.length < 50) {
-            setHasMoreMessages(false);
-            setShowStartMessage(true);
           }
         } catch (error) {
           console.error('Error loading initial messages:', error);
@@ -181,7 +176,7 @@ function ChatContent() {
       };
 
       const unsubscribePromise = loadInitialMessages();
-      
+
       return () => {
         unsubscribePromise.then(unsubscribe => {
           if (unsubscribe) unsubscribe();
@@ -194,7 +189,7 @@ function ChatContent() {
     if (!selectedContact || !oldestMessage || loadingOlderMessages || !hasMoreMessages) return;
 
     setLoadingOlderMessages(true);
-    
+
     try {
       const q = query(
         collection(db, 'rooms', selectedContact.roomID, 'messages'),
@@ -215,7 +210,7 @@ function ChatContent() {
         const sortedOlderMessages = olderMessages.reverse();
         setMessages(prevMessages => [...sortedOlderMessages, ...prevMessages]);
         setOldestMessage(snapshot.docs[snapshot.docs.length - 1]);
-        
+
         if (olderMessages.length < 50) {
           setHasMoreMessages(false);
           setShowStartMessage(true);
@@ -233,18 +228,18 @@ function ChatContent() {
 
   const handleScroll = (e) => {
     const { scrollTop } = e.target;
-    
+
     if (scrollTop <= 0 && hasMoreMessages && !loadingOlderMessages) {
       setIsPulling(true);
     } else if (isPulling && scrollTop > 0) {
       setIsPulling(false);
       setPullDistance(0);
     }
-    
+
     if (isPulling && scrollTop < 0) {
       const distance = Math.abs(scrollTop);
       setPullDistance(Math.min(distance, 80));
-      
+
       if (distance > 60) {
         setIsPulling(false);
         setPullDistance(0);
@@ -320,7 +315,7 @@ function ChatContent() {
               <ChatHeader selectedContact={selectedContact} isDark={isDark} />
               <div className="messages-container" ref={messagesContainerRef} onScroll={handleScroll}>
                 <ParticlesBackground />
-                <div 
+                <div
                   className={`pull-to-refresh ${isPulling ? 'pulling' : ''}`}
                   style={{ transform: `translateY(${pullDistance}px)` }}
                 >
@@ -347,6 +342,8 @@ function ChatContent() {
                   messagesEndRef={messagesEndRef}
                   handleDocumentClick={handleDocumentClick}
                   currentUserEmail={user.email}
+                  selectedContact={selectedContact}
+                  user={user}
                 />
               </div>
               {showCamera && (

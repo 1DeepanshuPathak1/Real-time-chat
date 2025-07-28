@@ -1,0 +1,133 @@
+.message-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.message-status-indicator {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  align-self: flex-end;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  position: relative;
+  z-index: 2;
+  transition: all 0.3s ease;
+}
+
+.status-pulse {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  opacity: 0;
+  z-index: 1;
+  transition: all 0.3s ease;
+}
+
+.status-sent .status-dot {
+  background-color: #64748b;
+  box-shadow: 0 0 4px rgba(100, 116, 139, 0.3);
+}
+
+.status-delivered .status-dot {
+  background-color: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
+  animation: deliveredPulse 2s ease-in-out infinite;
+}
+
+.status-delivered .status-pulse {
+  background-color: rgba(245, 158, 11, 0.3);
+  animation: deliveredRipple 2s ease-in-out infinite;
+}
+
+.status-read .status-dot {
+  background-color: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+  animation: readGlow 1.5s ease-in-out infinite alternate;
+}
+
+.status-read .status-pulse {
+  background-color: rgba(16, 185, 129, 0.2);
+  animation: readRipple 1.5s ease-in-out infinite;
+}
+
+@keyframes deliveredPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+@keyframes deliveredRipple {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.2); opacity: 0.4; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+
+@keyframes readGlow {
+  0% { box-shadow: 0 0 8px rgba(16, 185, 129, 0.5); }
+  100% { box-shadow: 0 0 12px rgba(16, 185, 129, 0.8); }
+}
+
+@keyframes readRipple {
+  0% { transform: scale(0.5); opacity: 0; }
+  50% { transform: scale(1); opacity: 0.3; }
+  100% { transform: scale(1.3); opacity: 0; }
+}
+
+.unread-counter {
+  position: relative;
+  min-width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+  animation: unreadBounce 0.4s ease-out;
+}
+
+.unread-count {
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0 4px;
+  position: relative;
+  z-index: 2;
+}
+
+.unread-glow {
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.4), rgba(220, 38, 38, 0.4));
+  animation: unreadGlow 2s ease-in-out infinite;
+  z-index: 1;
+}
+
+@keyframes unreadBounce {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+.contact-unread {
+  position: absolute;
+  right: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+}

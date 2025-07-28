@@ -4,10 +4,12 @@ import { FaSun, FaMoon } from 'react-icons/fa';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 import { FriendRequestHandler } from './FriendRequestHandler';
 import { useContactStatus } from '../UserStatusManager';
+import { UnreadMessageCounter } from '../MessageComps/MessageStatus';
 import '../css/ContactList.css';
 
 const ContactItem = ({ contact, selectedContact, onContactClick, handleContactClick }) => {
   const status = useContactStatus(contact);
+  const unreadCount = contact.unreadCount || contact.unreadMessages || 0;
   
   return (
     <div
@@ -35,9 +37,7 @@ const ContactItem = ({ contact, selectedContact, onContactClick, handleContactCl
           )}
         </div>
       </div>
-      {contact.unreadCount > 0 && (
-        <div className="unread-count">{contact.unreadCount}</div>
-      )}
+      <UnreadMessageCounter count={unreadCount} className="contact-unread" />
     </div>
   );
 };
