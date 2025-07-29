@@ -1,10 +1,7 @@
 import React from 'react';
-import { useContactStatus } from '../UserStatusManager';
 import '../css/ChatHeader.css';
 
-export const ChatHeader = ({ selectedContact, isDark }) => {
-  const status = useContactStatus(selectedContact);
-  
+export const ChatHeader = ({ selectedContact, isDark, contactStatus }) => {
   if (!selectedContact) return null;
 
   return (
@@ -18,14 +15,14 @@ export const ChatHeader = ({ selectedContact, isDark }) => {
         <div className="chat-header-details">
           <h2>{selectedContact.name}</h2>
           <span className="status-text">
-            {status.isOnline ? (
+            {contactStatus?.isOnline ? (
               <span className="online-status">
                 <span className="status-dot online"></span>
                 Online
               </span>
             ) : (
               <span className="offline-status">
-                {status.lastSeen}
+                {contactStatus?.lastSeen || 'Last seen recently'}
               </span>
             )}
           </span>

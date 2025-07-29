@@ -13,7 +13,7 @@ import { CameraOverlay } from './components/CameraComps/CameraOverlay';
 import { MessageInput } from './components/MessageComps/MessageInput';
 import { useCameraHandlers } from './components/CameraComps/CameraHandlers';
 import { useMessageHandlers } from './components/MessageComps/MessageHandlers';
-import { useUserStatus } from './components/UserStatusManager';
+import { useUserStatus, useContactStatus } from './components/UserStatusManager';
 import chunkedMessageService from './services/chunkedMessageService';
 import './css/Chat.css';
 import { useNavigate } from 'react-router-dom';
@@ -57,6 +57,7 @@ function ChatContent() {
   const documentInputRef = useRef(null);
   const videoRef = useRef(null);
   const navigate = useNavigate();
+  const selectedContactStatus = useContactStatus(selectedContact);
 
   useUserStatus(user);
 
@@ -129,21 +130,8 @@ function ChatContent() {
               const lastReadMessageId = roomData?.[`lastReadMessageId_${user.uid}`];
               
               let unreadCount = 0;
-              if (lastMessageId && lastMessageId !== lastReadMessageId) {
-                const latestChunk = await chunkedMessageService.getLatestChunk(contactData.roomID);
-                const pendingMessages = await chunkedMessageService.getMessagesFromRedis(contactData.roomID);
-                const allMessages = [...latestChunk.messages, ...pendingMessages];
-                
-                if (lastReadMessageId) {
-                  const lastReadIndex = allMessages.findIndex(msg => msg.id === lastReadMessageId);
-                  if (lastReadIndex !== -1) {
-                    unreadCount = allMessages.slice(lastReadIndex + 1).filter(msg => msg.sender !== user.email).length;
-                  } else {
-                    unreadCount = allMessages.filter(msg => msg.sender !== user.email).length;
-                  }
-                } else {
-                  unreadCount = allMessages.filter(msg => msg.sender !== user.email).length;
-                }
+              if (lastMessageId && lastMessageId !== lastReadMessageId && lastMessageTimestamp > lastReadTimestamp) {
+                unreadCount = 1;
               }
               
               return {
@@ -210,34 +198,12 @@ function ChatContent() {
           
           setFirstUnreadIndex(firstUnreadIdx);
 
-          const handleRealtimeMessages = () => {
-            const intervalId = setInterval(async () => {
-              const pendingMessages = await chunkedMessageService.getPendingMessages(selectedContact.roomID);
-              if (pendingMessages.length > 0) {
-                setMessages(prevMessages => {
-                  const messageIds = new Set(prevMessages.map(m => m.id));
-                  const newMessages = pendingMessages.filter(m => !messageIds.has(m.id));
-                  return [...prevMessages, ...newMessages];
-                });
-              }
-            }, 1000);
-
-            return () => clearInterval(intervalId);
-          };
-
-          return handleRealtimeMessages();
         } catch (error) {
           console.error('Error loading initial messages:', error);
         }
       };
 
-      const unsubscribePromise = loadInitialMessages();
-
-      return () => {
-        unsubscribePromise.then(unsubscribe => {
-          if (unsubscribe) unsubscribe();
-        });
-      };
+      loadInitialMessages();
     }
   }, [selectedContact, user, isConnected, joinRoom]);
 
@@ -436,7 +402,7 @@ function ChatContent() {
         <div className="chat-window">
           {selectedContact ? (
             <>
-              <ChatHeader selectedContact={selectedContact} isDark={isDark} />
+              <ChatHeader selectedContact={selectedContact} isDark={isDark} contactStatus={selectedContactStatus} />
               <div className="messages-container" ref={messagesContainerRef} onScroll={handleScroll}>
                 <ParticlesBackground />
                 <div
