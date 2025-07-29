@@ -1,7 +1,11 @@
+const MessageBatchService = require('../services/messageBatchService');
+
 class SocketController {
-    constructor(io, roomModel) {
+    constructor(io, roomModel, db) {
         this.io = io;
         this.roomModel = roomModel;
+        this.db = db;
+        this.batchService = new MessageBatchService(db);
         this.setupSocketEvents();
     }
 
@@ -15,12 +19,16 @@ class SocketController {
             });
 
             socket.on('send-message', async (data) => {
-                const { roomID, message, sender } = data;
+                const { roomID, message, sender, messageId } = data;
                 try {
-                    await this.roomModel.addMessage(roomID, sender, message.content, message.type);
-                    socket.to(roomID).emit('received-message', { sender, message: message.content });
+                    this.io.to(roomID).emit('received-message', { 
+                        roomID,
+                        sender, 
+                        message,
+                        messageId 
+                    });
                 } catch (error) {
-                    console.error('Error sending message:', error);
+                    console.error('Error broadcasting message:', error);
                 }
             });
 
