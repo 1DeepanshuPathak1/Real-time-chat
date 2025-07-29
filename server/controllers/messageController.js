@@ -8,7 +8,7 @@ class MessageController {
 
     async sendMessage(req, res) {
         const { roomId, sender, content, type = 'text', fileName, fileSize, fileType, fileUrl } = req.body;
-        
+
         try {
             if (!roomId || !sender || !content) {
                 return res.status(400).json({ error: 'Missing required fields' });
@@ -28,9 +28,9 @@ class MessageController {
             };
 
             const messageId = await this.batchService.addMessageToBatch(roomId, messageData);
-            
-            res.status(200).json({ 
-                success: true, 
+
+            res.status(200).json({
+                success: true,
                 messageId,
                 message: 'Message queued for delivery'
             });
@@ -42,7 +42,7 @@ class MessageController {
 
     async getLatestMessages(req, res) {
         const { roomId } = req.params;
-        
+
         try {
             if (!roomId) {
                 return res.status(400).json({ error: 'Room ID is required' });
@@ -50,9 +50,9 @@ class MessageController {
 
             const latestChunk = await this.batchService.getLatestChunk(roomId);
             const pendingMessages = await this.batchService.getMessagesFromRedis(roomId);
-            
+
             const allMessages = [...latestChunk.messages, ...pendingMessages];
-            
+
             res.status(200).json({
                 id: latestChunk.id,
                 messages: allMessages,
@@ -66,14 +66,14 @@ class MessageController {
 
     async getOlderMessages(req, res) {
         const { roomId, chunkId } = req.params;
-        
+
         try {
             if (!roomId || !chunkId) {
                 return res.status(400).json({ error: 'Room ID and Chunk ID are required' });
             }
 
             const olderChunk = await this.batchService.getOlderChunk(roomId, chunkId);
-            
+
             if (!olderChunk) {
                 return res.status(200).json({
                     id: null,
@@ -81,7 +81,7 @@ class MessageController {
                     hasMore: false
                 });
             }
-            
+
             res.status(200).json(olderChunk);
         } catch (error) {
             console.error('Error fetching older messages:', error);
@@ -91,14 +91,14 @@ class MessageController {
 
     async getPendingMessages(req, res) {
         const { roomId } = req.params;
-        
+
         try {
             if (!roomId) {
                 return res.status(400).json({ error: 'Room ID is required' });
             }
 
             const pendingMessages = await this.batchService.getMessagesFromRedis(roomId);
-            
+
             res.status(200).json({
                 messages: pendingMessages
             });
@@ -111,7 +111,7 @@ class MessageController {
     async getUnreadCount(req, res) {
         const { roomId } = req.params;
         const { lastRead } = req.query;
-        
+
         try {
             if (!roomId) {
                 return res.status(400).json({ error: 'Room ID is required' });
@@ -120,12 +120,12 @@ class MessageController {
             const lastReadTimestamp = parseInt(lastRead) || 0;
             const latestChunk = await this.batchService.getLatestChunk(roomId);
             const pendingMessages = await this.batchService.getMessagesFromRedis(roomId);
-            
+
             const allMessages = [...latestChunk.messages, ...pendingMessages];
-            const unreadCount = allMessages.filter(msg => 
-                new Date(msg.time).getTime() > lastReadTimestamp
+            const unreadCount = allMessages.filter(msg =>
+                (msg.t || new Date(msg.time).getTime()) > lastReadTimestamp
             ).length;
-            
+
             res.status(200).json({ count: unreadCount });
         } catch (error) {
             console.error('Error calculating unread count:', error);
@@ -135,7 +135,7 @@ class MessageController {
 
     async markMessagesRead(req, res) {
         const { roomId, userId, readTimestamp } = req.body;
-        
+
         try {
             if (!roomId || !userId || !readTimestamp) {
                 return res.status(400).json({ error: 'Missing required fields' });
@@ -145,7 +145,7 @@ class MessageController {
             await roomRef.update({
                 [`lastReadBy_${userId}`]: readTimestamp
             });
-            
+
             res.status(200).json({ success: true });
         } catch (error) {
             console.error('Error marking messages as read:', error);
