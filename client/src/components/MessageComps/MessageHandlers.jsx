@@ -1,62 +1,105 @@
-import { getFirestore, collection, addDoc } from 'firebase/firestore';
-
-const db = getFirestore();
+import { useState } from 'react';
+import chunkedMessageService from '../../services/chunkedMessageService';
 
 export const useMessageHandlers = (setMessages, socket, selectedContact, user) => {
+  const [isSending, setIsSending] = useState(false);
+
   const handleSendMessage = async (inputMessage, setInputMessage) => {
-    if (inputMessage.trim() && selectedContact && user) {
+    if (!inputMessage.trim() || !selectedContact || !user || isSending) return;
+
+    setIsSending(true);
+    const messageContent = inputMessage.trim();
+    setInputMessage('');
+
+    try {
       const messageData = {
         sender: user.email,
-        content: inputMessage.trim(),
-        time: new Date().toISOString(),
+        content: messageContent,
         type: 'text'
       };
 
-      try {
-        await addDoc(collection(db, 'rooms', selectedContact.roomID, 'messages'), messageData);
-        setInputMessage('');
-      } catch (error) {
-        console.error('Error sending message:', error);
+      const messageId = await chunkedMessageService.sendMessage(selectedContact.roomID, messageData);
+      
+      const newMessage = {
+        id: messageId,
+        sender: user.email,
+        content: messageContent,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toISOString(),
+        type: 'text',
+        isDelivered: false,
+        isRead: false
+      };
+
+      setMessages(prevMessages => [...prevMessages, newMessage]);
+
+      if (socket) {
+        socket.emit('send-message', {
+          roomID: selectedContact.roomID,
+          message: messageContent,
+          sender: user.email,
+          messageId: messageId,
+          timestamp: newMessage.timestamp
+        });
       }
+
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setInputMessage(messageContent);
+    } finally {
+      setIsSending(false);
     }
   };
 
   const handleFileUpload = async (file, type) => {
-    if (file && selectedContact && user) {
-      if (type === 'image' && file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-          const messageData = {
-            sender: user.email,
-            content: e.target.result,
-            time: new Date().toISOString(),
-            type: 'image'
-          };
+    if (!file || !selectedContact || !user || isSending) return;
 
-          try {
-            await addDoc(collection(db, 'rooms', selectedContact.roomID, 'messages'), messageData);
-          } catch (error) {
-            console.error('Error sending image:', error);
-          }
-        };
-        reader.readAsDataURL(file);
-      } else if (type === 'document') {
-        const messageData = {
+    setIsSending(true);
+    
+    try {
+      const messageData = {
+        sender: user.email,
+        content: file.name,
+        type: type,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type
+      };
+
+      const messageId = await chunkedMessageService.sendMessage(selectedContact.roomID, messageData);
+      
+      const newMessage = {
+        id: messageId,
+        sender: user.email,
+        content: URL.createObjectURL(file),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toISOString(),
+        type: type,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        isDelivered: false,
+        isRead: false
+      };
+
+      setMessages(prevMessages => [...prevMessages, newMessage]);
+
+      if (socket) {
+        socket.emit('send-message', {
+          roomID: selectedContact.roomID,
+          message: file.name,
           sender: user.email,
-          content: `📄 ${file.name}`,
-          time: new Date().toISOString(),
-          type: 'document',
+          messageId: messageId,
+          type: type,
           fileName: file.name,
-          fileSize: file.size,
-          fileType: file.type
-        };
-
-        try {
-          await addDoc(collection(db, 'rooms', selectedContact.roomID, 'messages'), messageData);
-        } catch (error) {
-          console.error('Error sending document:', error);
-        }
+          timestamp: newMessage.timestamp
+        });
       }
+
+    } catch (error) {
+      console.error('Error uploading file:', error);
+    } finally {
+      setIsSending(false);
     }
   };
 

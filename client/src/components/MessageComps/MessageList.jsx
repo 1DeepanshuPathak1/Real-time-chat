@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { FiFile } from 'react-icons/fi';
 import { MessageStatusIndicator } from './MessageStatus';
-import { getFirestore, doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { getFirestore, doc, updateDoc } from 'firebase/firestore';
 import { useSocket } from '../../services/SocketService';
 
 const db = getFirestore();
@@ -46,28 +46,16 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
     const markMessagesAsRead = async () => {
       if (!user || !selectedContact || messages.length === 0) return;
 
-      const visibleMessages = messages.filter(msg => 
+      const unreadMessages = messages.filter(msg => 
         msg.sender !== currentUserEmail && 
-        !msg.isRead &&
         new Date(msg.timestamp).getTime() > lastReadTimestamp.current
       );
 
-      if (visibleMessages.length === 0) return;
+      if (unreadMessages.length === 0) return;
 
-      const messageIds = visibleMessages.map(msg => msg.id);
-      const latestTimestamp = Math.max(...visibleMessages.map(msg => new Date(msg.timestamp).getTime()));
+      const latestTimestamp = Math.max(...unreadMessages.map(msg => new Date(msg.timestamp).getTime()));
       
       try {
-        for (const message of visibleMessages) {
-          const messageRef = doc(db, 'rooms', selectedContact.roomID, 'messages', message.id);
-          await updateDoc(messageRef, {
-            isDelivered: true,
-            isRead: true,
-            readAt: new Date().toISOString(),
-            readBy: user.email
-          });
-        }
-
         const roomRef = doc(db, 'rooms', selectedContact.roomID);
         await updateDoc(roomRef, {
           [`lastReadBy_${user.uid}`]: latestTimestamp
@@ -76,7 +64,7 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
         if (socket) {
           socket.emit('mark-messages-read', {
             roomId: selectedContact.roomID,
-            messageIds: messageIds,
+            messageIds: unreadMessages.map(msg => msg.id),
             userId: user.uid,
             userEmail: user.email,
             readTimestamp: latestTimestamp
@@ -99,6 +87,13 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
     return messages.slice(firstUnreadIndex).filter(msg => msg.sender !== currentUserEmail).length;
   };
 
+  const isMessageRead = (message, currentUser) => {
+    if (message.sender === currentUser?.email) return true;
+    
+    const messageTimestamp = new Date(message.timestamp).getTime();
+    return messageTimestamp <= lastReadTimestamp.current;
+  };
+
   return (
     <div className="messages-scroll">
       {messages.map((message, index) => (
@@ -119,7 +114,7 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
               ) : message.type === 'document' ? (
                 <div
                   className="document-message cursor-pointer hover:bg-gray-100"
-                  onClick={() => handleDocumentClick(message.fileUrl)}
+                  onClick={() => handleDocumentClick(message.fileUrl || message.content)}
                 >
                   <FiFile className="document-icon" />
                   <span>{message.fileName || message.content}</span>
@@ -130,7 +125,11 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
               <div className="message-meta">
                 <span className="message-time">{message.time}</span>
                 <MessageStatusIndicator 
-                  message={message}
+                  message={{
+                    ...message,
+                    isDelivered: true,
+                    isRead: isMessageRead(message, user)
+                  }}
                   currentUser={user}
                   selectedContact={selectedContact}
                 />

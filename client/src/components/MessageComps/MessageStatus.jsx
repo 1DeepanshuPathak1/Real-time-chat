@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getFirestore, doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { useSocket } from '../../services/SocketService';
 import './css/MessageStatus.css';
-
-const db = getFirestore();
 
 const userStatusCache = new Map();
 
@@ -17,7 +14,7 @@ export const MessageStatusIndicator = ({ message, currentUser, selectedContact }
   useEffect(() => {
     if (!message || !selectedContact || !currentUser) return;
 
-    const checkMessageStatus = async () => {
+    const checkMessageStatus = () => {
       try {
         if (message.isRead) {
           setStatus('read');
@@ -30,32 +27,12 @@ export const MessageStatusIndicator = ({ message, currentUser, selectedContact }
         }
 
         const contactEmail = selectedContact.email;
-        let contactStatus = userStatusCache.get(contactEmail);
+        const contactStatus = userStatusCache.get(contactEmail);
         
-        if (!contactStatus) {
-          const usersRef = collection(db, 'users');
-          const q = query(usersRef, where('email', '==', contactEmail));
-          const querySnapshot = await getDocs(q);
-          
-          if (!querySnapshot.empty) {
-            const contactData = querySnapshot.docs[0].data();
-            contactStatus = {
-              isOnline: contactData.isOnline,
-              lastSeenTimestamp: contactData.lastSeenTimestamp
-            };
-            userStatusCache.set(contactEmail, contactStatus);
-          }
-        }
-
-        if (contactStatus) {
+        if (contactStatus && contactStatus.isOnline) {
           const messageTimestamp = new Date(message.timestamp).getTime();
           
-          if (contactStatus.isOnline && contactStatus.lastSeenTimestamp > messageTimestamp) {
-            const messageRef = doc(db, 'rooms', selectedContact.roomID, 'messages', message.id);
-            await updateDoc(messageRef, {
-              isDelivered: true,
-              deliveredAt: new Date().toISOString()
-            });
+          if (contactStatus.lastSeenTimestamp > messageTimestamp) {
             setStatus('delivered');
           }
         }
@@ -67,21 +44,14 @@ export const MessageStatusIndicator = ({ message, currentUser, selectedContact }
     };
 
     checkMessageStatus();
-
-    const interval = setInterval(checkMessageStatus, 2000);
+    const interval = setInterval(checkMessageStatus, 5000);
     return () => clearInterval(interval);
   }, [message, selectedContact, currentUser]);
 
   useEffect(() => {
     if (socket && selectedContact && message) {
-      const handleMessageRead = async (data) => {
+      const handleMessageRead = (data) => {
         if (data.roomId === selectedContact.roomID && data.messageIds.includes(message.id)) {
-          const messageRef = doc(db, 'rooms', selectedContact.roomID, 'messages', message.id);
-          await updateDoc(messageRef, {
-            isDelivered: true,
-            isRead: true,
-            readAt: new Date().toISOString()
-          });
           setStatus('read');
         }
       };

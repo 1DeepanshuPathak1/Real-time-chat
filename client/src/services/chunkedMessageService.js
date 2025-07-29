@@ -6,7 +6,9 @@ const db = getFirestore();
 class ChunkedMessageService {
     constructor() {
         this.cache = new Map();
+        this.unreadCache = new Map();
         this.messagesPerChunk = 50;
+        this.cacheTimeout = 30000;
     }
 
     async getLatestMessages(roomId) {
@@ -23,9 +25,9 @@ class ChunkedMessageService {
             }
 
             const data = await response.json();
-            
+
             const formattedMessages = this.formatMessages(data.messages);
-            
+
             this.cache.set(`${roomId}_latest`, {
                 messages: formattedMessages,
                 chunkId: data.id,
@@ -46,7 +48,7 @@ class ChunkedMessageService {
 
     async getOlderMessages(roomId, currentChunkId) {
         const cacheKey = `${roomId}_${currentChunkId}`;
-        
+
         if (this.cache.has(cacheKey)) {
             const cached = this.cache.get(cacheKey);
             if (Date.now() - cached.timestamp < 300000) {
@@ -67,13 +69,13 @@ class ChunkedMessageService {
             }
 
             const data = await response.json();
-            
+
             if (!data.messages) {
                 return { messages: [], chunkId: null, hasMore: false };
             }
 
             const formattedMessages = this.formatMessages(data.messages);
-            
+
             const result = {
                 messages: formattedMessages,
                 chunkId: data.id,
@@ -112,20 +114,16 @@ class ChunkedMessageService {
 
     formatMessages(messages) {
         return messages.map(msg => ({
-            id: msg.id,
-            sender: msg.sender,
-            content: msg.content,
-            time: new Date(msg.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            timestamp: msg.time,
-            type: msg.type || 'text',
-            fileName: msg.fileName,
-            fileSize: msg.fileSize,
-            fileType: msg.fileType,
-            fileUrl: msg.fileUrl,
-            isDelivered: msg.isDelivered || false,
-            isRead: msg.isRead || false,
-            readAt: msg.readAt,
-            deliveredAt: msg.deliveredAt
+            id: msg.i || msg.id,
+            sender: msg.s || msg.sender,
+            content: msg.c || msg.content,
+            time: new Date(msg.t || msg.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            timestamp: msg.t || msg.time,
+            type: msg.ty || msg.type || 'text',
+            fileName: msg.fn || msg.fileName,
+            fileSize: msg.fs || msg.fileSize,
+            fileType: msg.ft || msg.fileType,
+            fileUrl: msg.fu || msg.fileUrl
         }));
     }
 
@@ -165,11 +163,18 @@ class ChunkedMessageService {
     }
 
     async getUnreadCount(roomId, userId) {
+        const cacheKey = `unread_${roomId}_${userId}`;
+        const cached = this.unreadCache.get(cacheKey);
+
+        if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
+            return cached.count;
+        }
+
         try {
             const roomRef = doc(db, 'rooms', roomId);
             const roomDoc = await getDoc(roomRef);
             const lastReadTimestamp = roomDoc.data()?.[`lastReadBy_${userId}`] || 0;
-            
+
             const response = await fetch(`${API_BASE_URL}/api/messages/unread-count/${roomId}?lastRead=${lastReadTimestamp}`, {
                 method: 'GET',
                 headers: {
@@ -178,15 +183,29 @@ class ChunkedMessageService {
             });
 
             if (!response.ok) {
+                if (response.status === 429) {
+                    return cached ? cached.count : 0;
+                }
                 return 0;
             }
 
             const data = await response.json();
-            return data.count || 0;
+            const count = data.count || 0;
+
+            this.unreadCache.set(cacheKey, {
+                count,
+                timestamp: Date.now()
+            });
+
+            return count;
         } catch (error) {
             console.error('Error getting unread count:', error);
-            return 0;
+            return cached ? cached.count : 0;
         }
+    }
+    clearUnreadCache(roomId, userId) {
+        const cacheKey = `unread_${roomId}_${userId}`;
+        this.unreadCache.delete(cacheKey);
     }
 }
 

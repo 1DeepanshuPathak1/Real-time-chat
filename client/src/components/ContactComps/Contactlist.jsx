@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { UserPlus, Copy, Check, Users, Bell, ChevronUp, ChevronDown } from 'lucide-react';
 import { FaSun, FaMoon } from 'react-icons/fa';
-import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { FriendRequestHandler } from './FriendRequestHandler';
 import { useContactStatus } from '../UserStatusManager';
 import { UnreadMessageCounter } from '../MessageComps/MessageStatus';

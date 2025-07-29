@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, query, onSnapshot, addDoc, orderBy, limit, startAfter, getDocs, where, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { getFirestore, collection, query, onSnapshot, orderBy, limit, getDocs, where, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { SocketProvider, useSocket } from './services/SocketService';
 import { EmojiPickerComponent } from './components/MessageComps/EmojiPicker';
 import { ParticlesBackground } from './components/MessageComps/ParticlesBackground';
@@ -14,6 +14,7 @@ import { MessageInput } from './components/MessageComps/MessageInput';
 import { useCameraHandlers } from './components/CameraComps/CameraHandlers';
 import { useMessageHandlers } from './components/MessageComps/MessageHandlers';
 import { useUserStatus } from './components/UserStatusManager';
+import chunkedMessageService from './services/chunkedMessageService';
 import './css/Chat.css';
 import { useNavigate } from 'react-router-dom';
 
@@ -44,7 +45,7 @@ function ChatContent() {
   const [loading, setLoading] = useState(true);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
-  const [oldestMessage, setOldestMessage] = useState(null);
+  const [currentChunkId, setCurrentChunkId] = useState(null);
   const [pullDistance, setPullDistance] = useState(0);
   const [isPulling, setIsPulling] = useState(false);
   const [showStartMessage, setShowStartMessage] = useState(false);
@@ -86,61 +87,29 @@ function ChatContent() {
     return () => unsubscribe();
   }, [navigate]);
 
-  const getUnreadCount = async (contact) => {
+  const getUnreadCount = useCallback(async (contact) => {
     if (!user || !contact.roomID) return 0;
-    
+
     try {
-      const roomRef = doc(db, 'rooms', contact.roomID);
-      const roomDoc = await getDoc(roomRef);
-      const lastReadTimestamp = roomDoc.data()?.[`lastReadBy_${user.uid}`] || 0;
-      
-      const messagesRef = collection(db, 'rooms', contact.roomID, 'messages');
-      const messagesQuery = query(messagesRef, orderBy('time', 'desc'));
-      const snapshot = await getDocs(messagesQuery);
-      
-      let unreadCount = 0;
-      snapshot.docs.forEach(doc => {
-        const messageData = doc.data();
-        if (messageData.sender !== user.email) {
-          const messageTimestamp = new Date(messageData.time).getTime();
-          if (messageTimestamp > lastReadTimestamp) {
-            unreadCount++;
-          }
-        }
-      });
-      
+      const unreadCount = await chunkedMessageService.getUnreadCount(contact.roomID, user.uid);
       return unreadCount;
     } catch (error) {
       console.error('Error calculating unread count:', error);
       return 0;
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     if (user) {
       const q = query(collection(db, 'users', user.uid, 'contacts'));
       const unsubscribe = onSnapshot(q, async (snapshot) => {
-        const contactsData = await Promise.all(
-          snapshot.docs.map(async (doc) => {
-            const contactData = { id: doc.id, ...doc.data() };
-            const unreadCount = await getUnreadCount(contactData);
-            
-            const lastMessageQuery = query(
-              collection(db, 'rooms', contactData.roomID, 'messages'),
-              orderBy('time', 'desc'),
-              limit(1)
-            );
-            const lastMessageSnapshot = await getDocs(lastMessageQuery);
-            const lastMessageTime = lastMessageSnapshot.docs[0]?.data()?.time || 0;
-            
-            return {
-              ...contactData,
-              unreadCount,
-              lastMessageTime: new Date(lastMessageTime).getTime()
-            };
-          })
-        );
-        
+        const contactsData = snapshot.docs.map(docSnap => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+          unreadCount: 0,
+          lastMessageTime: Date.now()
+        }));
+
         const sortedContacts = contactsData.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
         setContacts(sortedContacts);
       });
@@ -157,7 +126,7 @@ function ChatContent() {
       setHasScrolledToUnread(false);
       setFirstUnreadIndex(-1);
       setMessages([]);
-      setOldestMessage(null);
+      setCurrentChunkId(null);
       setHasMoreMessages(true);
       setShowStartMessage(false);
       setPullDistance(0);
@@ -165,63 +134,33 @@ function ChatContent() {
 
       const loadInitialMessages = async () => {
         try {
-          const q = query(
-            collection(db, 'rooms', selectedContact.roomID, 'messages'),
-            orderBy('time', 'desc'),
-            limit(50)
-          );
+          const result = await chunkedMessageService.getLatestMessages(selectedContact.roomID);
 
-          const snapshot = await getDocs(q);
-          const messagesData = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            time: new Date(doc.data().time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            timestamp: doc.data().time
-          }));
+          console.log('Initial messages loaded:', result.messages.length);
+          setMessages(result.messages);
+          setCurrentChunkId(result.chunkId);
+          setHasMoreMessages(result.hasMore);
 
-          const sortedMessages = messagesData.reverse();
-          console.log('Initial messages loaded:', sortedMessages.length);
-          setMessages(sortedMessages);
-
-          if (messagesData.length > 0) {
-            setOldestMessage(snapshot.docs[snapshot.docs.length - 1]);
-
-            const realtimeQ = query(
-              collection(db, 'rooms', selectedContact.roomID, 'messages'),
-              orderBy('time', 'asc')
-            );
-
-            const unsubscribe = onSnapshot(realtimeQ, (realtimeSnapshot) => {
-              const allMessages = realtimeSnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-                time: new Date(doc.data().time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                timestamp: doc.data().time
-              }));
-
-              setMessages(allMessages);
-            });
-
-            return unsubscribe;
-          } else {
-            const realtimeQ = query(
-              collection(db, 'rooms', selectedContact.roomID, 'messages'),
-              orderBy('time', 'asc')
-            );
-
-            const unsubscribe = onSnapshot(realtimeQ, (realtimeSnapshot) => {
-              const allMessages = realtimeSnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-                time: new Date(doc.data().time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                timestamp: doc.data().time
-              }));
-
-              setMessages(allMessages);
-            });
-
-            return unsubscribe;
+          if (result.messages.length === 0) {
+            setShowStartMessage(true);
           }
+
+          const handleRealtimeMessages = () => {
+            const intervalId = setInterval(async () => {
+              const pendingMessages = await chunkedMessageService.getPendingMessages(selectedContact.roomID);
+              if (pendingMessages.length > 0) {
+                setMessages(prevMessages => {
+                  const messageIds = new Set(prevMessages.map(m => m.id));
+                  const newMessages = pendingMessages.filter(m => !messageIds.has(m.id));
+                  return [...prevMessages, ...newMessages];
+                });
+              }
+            }, 1000);
+
+            return () => clearInterval(intervalId);
+          };
+
+          return handleRealtimeMessages();
         } catch (error) {
           console.error('Error loading initial messages:', error);
         }
@@ -238,33 +177,19 @@ function ChatContent() {
   }, [selectedContact, user, isConnected, joinRoom]);
 
   const loadOlderMessages = async () => {
-    if (!selectedContact || !oldestMessage || loadingOlderMessages || !hasMoreMessages) return;
+    if (!selectedContact || !currentChunkId || loadingOlderMessages || !hasMoreMessages) return;
 
     setLoadingOlderMessages(true);
 
     try {
-      const q = query(
-        collection(db, 'rooms', selectedContact.roomID, 'messages'),
-        orderBy('time', 'desc'),
-        startAfter(oldestMessage),
-        limit(50)
-      );
+      const result = await chunkedMessageService.getOlderMessages(selectedContact.roomID, currentChunkId);
 
-      const snapshot = await getDocs(q);
-      const olderMessages = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        time: new Date(doc.data().time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        timestamp: doc.data().time
-      }));
+      if (result.messages.length > 0) {
+        setMessages(prevMessages => [...result.messages, ...prevMessages]);
+        setCurrentChunkId(result.chunkId);
+        setHasMoreMessages(result.hasMore);
 
-      if (olderMessages.length > 0) {
-        const sortedOlderMessages = olderMessages.reverse();
-        setMessages(prevMessages => [...sortedOlderMessages, ...prevMessages]);
-        setOldestMessage(snapshot.docs[snapshot.docs.length - 1]);
-
-        if (olderMessages.length < 50) {
-          setHasMoreMessages(false);
+        if (!result.hasMore) {
           setShowStartMessage(true);
         }
       } else {
@@ -304,38 +229,21 @@ function ChatContent() {
   useEffect(() => {
     const updateContactsRealTime = () => {
       if (!user) return;
-      
-      const allRoomsQuery = query(collection(db, 'rooms'));
-      const unsubscribeRooms = onSnapshot(allRoomsQuery, () => {
-        const contactsQuery = query(collection(db, 'users', user.uid, 'contacts'));
-        getDocs(contactsQuery).then(async (contactsSnapshot) => {
-          const updatedContacts = await Promise.all(
-            contactsSnapshot.docs.map(async (doc) => {
-              const contactData = { id: doc.id, ...doc.data() };
-              const unreadCount = await getUnreadCount(contactData);
-              
-              const lastMessageQuery = query(
-                collection(db, 'rooms', contactData.roomID, 'messages'),
-                orderBy('time', 'desc'),
-                limit(1)
-              );
-              const lastMessageSnapshot = await getDocs(lastMessageQuery);
-              const lastMessageTime = lastMessageSnapshot.docs[0]?.data()?.time || 0;
-              
-              return {
-                ...contactData,
-                unreadCount,
-                lastMessageTime: new Date(lastMessageTime).getTime()
-              };
-            })
-          );
-          
-          const sortedContacts = updatedContacts.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
-          setContacts(sortedContacts);
-        });
+
+      const contactsQuery = query(collection(db, 'users', user.uid, 'contacts'));
+      const unsubscribeContacts = onSnapshot(contactsQuery, (snapshot) => {
+        const updatedContacts = snapshot.docs.map(docSnap => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+          unreadCount: 0,
+          lastMessageTime: Date.now()
+        }));
+
+        const sortedContacts = updatedContacts.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
+        setContacts(sortedContacts);
       });
 
-      return unsubscribeRooms;
+      return unsubscribeContacts;
     };
 
     if (user) {
@@ -349,7 +257,7 @@ function ChatContent() {
   useEffect(() => {
     const unsubscribeMessage = onMessageReceived(async (data) => {
       console.log('Received real-time message:', data);
-      
+
       if (user) {
         const contactsQuery = query(collection(db, 'users', user.uid, 'contacts'));
         const contactsSnapshot = await getDocs(contactsQuery);
@@ -357,15 +265,12 @@ function ChatContent() {
           contactsSnapshot.docs.map(async (doc) => {
             const contactData = { id: doc.id, ...doc.data() };
             const unreadCount = await getUnreadCount(contactData);
-            
-            const lastMessageQuery = query(
-              collection(db, 'rooms', contactData.roomID, 'messages'),
-              orderBy('time', 'desc'),
-              limit(1)
-            );
-            const lastMessageSnapshot = await getDocs(lastMessageQuery);
-            const lastMessageTime = lastMessageSnapshot.docs[0]?.data()?.time || 0;
-            
+
+            const roomRef = doc(db, 'rooms', contactData.roomID);
+            const roomDoc = await getDoc(roomRef);
+            const roomData = roomDoc.data();
+            const lastMessageTime = roomData?.lastMessageTime || 0;
+
             return {
               ...contactData,
               unreadCount,
@@ -373,7 +278,7 @@ function ChatContent() {
             };
           })
         );
-        
+
         const sortedContacts = updatedContacts.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
         setContacts(sortedContacts);
       }
@@ -390,19 +295,19 @@ function ChatContent() {
 
   const scrollToFirstUnreadMessage = useCallback(async () => {
     if (!selectedContact || !user || messages.length === 0 || hasScrolledToUnread) return;
-    
+
     try {
       const roomRef = doc(db, 'rooms', selectedContact.roomID);
       const roomDoc = await getDoc(roomRef);
       const lastReadTimestamp = roomDoc.data()?.[`lastReadBy_${user.uid}`] || 0;
-      
-      const firstUnreadIdx = messages.findIndex(msg => 
-        msg.sender !== user.email && 
+
+      const firstUnreadIdx = messages.findIndex(msg =>
+        msg.sender !== user.email &&
         new Date(msg.timestamp).getTime() > lastReadTimestamp
       );
-      
+
       setFirstUnreadIndex(firstUnreadIdx);
-      
+
       if (firstUnreadIdx !== -1) {
         setTimeout(() => {
           const messageElements = document.querySelectorAll('.message');
