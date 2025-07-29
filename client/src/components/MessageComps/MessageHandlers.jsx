@@ -19,16 +19,14 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
       };
 
       const messageId = await chunkedMessageService.sendMessage(selectedContact.roomID, messageData);
-      
+
       const newMessage = {
         id: messageId,
         sender: user.email,
         content: messageContent,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        timestamp: new Date().toISOString(),
-        type: 'text',
-        isDelivered: false,
-        isRead: false
+        timestamp: Date.now(),
+        type: 'text'
       };
 
       setMessages(prevMessages => [...prevMessages, newMessage]);
@@ -55,7 +53,7 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
     if (!file || !selectedContact || !user || isSending) return;
 
     setIsSending(true);
-    
+
     try {
       const messageData = {
         sender: user.email,
@@ -67,7 +65,7 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
       };
 
       const messageId = await chunkedMessageService.sendMessage(selectedContact.roomID, messageData);
-      
+
       const newMessage = {
         id: messageId,
         sender: user.email,

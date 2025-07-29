@@ -113,18 +113,21 @@ class ChunkedMessageService {
     }
 
     formatMessages(messages) {
-        return messages.map(msg => ({
-            id: msg.i || msg.id,
-            sender: msg.s || msg.sender,
-            content: msg.c || msg.content,
-            time: new Date(msg.t || msg.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            timestamp: msg.t || msg.time,
-            type: msg.ty || msg.type || 'text',
-            fileName: msg.fn || msg.fileName,
-            fileSize: msg.fs || msg.fileSize,
-            fileType: msg.ft || msg.fileType,
-            fileUrl: msg.fu || msg.fileUrl
-        }));
+        return messages.map(msg => {
+            const timestamp = msg.t || msg.timestamp || msg.time || Date.now();
+            return {
+                id: msg.i || msg.id,
+                sender: msg.s || msg.sender,
+                content: msg.c || msg.content,
+                time: new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                timestamp: timestamp,
+                type: msg.ty || msg.type || 'text',
+                fileName: msg.fn || msg.fileName,
+                fileSize: msg.fs || msg.fileSize,
+                fileType: msg.ft || msg.fileType,
+                fileUrl: msg.fu || msg.fileUrl
+            };
+        });
     }
 
     async sendMessage(roomId, messageData) {
@@ -145,6 +148,7 @@ class ChunkedMessageService {
             }
 
             const result = await response.json();
+            this.clearUnreadCache(roomId);
             return result.messageId;
         } catch (error) {
             console.error('Error sending message:', error);
@@ -152,14 +156,14 @@ class ChunkedMessageService {
         }
     }
 
-    clearCache(roomId) {
+    clearUnreadCache(roomId) {
         const keysToDelete = [];
-        for (const key of this.cache.keys()) {
-            if (key.startsWith(roomId)) {
+        for (const key of this.unreadCache.keys()) {
+            if (key.includes(roomId)) {
                 keysToDelete.push(key);
             }
         }
-        keysToDelete.forEach(key => this.cache.delete(key));
+        keysToDelete.forEach(key => this.unreadCache.delete(key));
     }
 
     async getUnreadCount(roomId, userId) {

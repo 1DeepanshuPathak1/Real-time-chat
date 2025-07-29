@@ -12,7 +12,7 @@ class MessageBatchService {
     async addMessageToBatch(roomId, messageData) {
         const redis = await connectRedis();
         const messageId = `${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-        
+
         const messageWithId = {
             i: messageId,
             s: messageData.sender,
@@ -41,7 +41,7 @@ class MessageBatchService {
     async incrementChunkIfNeeded(roomId, currentChunkId) {
         const redis = await connectRedis();
         const chunkSize = await redis.get(`chunk_size:${roomId}:${currentChunkId}`) || 0;
-        
+
         if (parseInt(chunkSize) >= this.maxBatchSize) {
             const chunkNumber = parseInt(currentChunkId.split('_')[1]) + 1;
             const newChunkId = `chunk_${chunkNumber}`;
@@ -49,7 +49,7 @@ class MessageBatchService {
             await redis.set(`chunk_size:${roomId}:${newChunkId}`, 0);
             return newChunkId;
         }
-        
+
         return currentChunkId;
     }
 
@@ -62,7 +62,7 @@ class MessageBatchService {
     async processBatchWrites() {
         const redis = await connectRedis();
         const keys = await redis.keys('pending_messages:*');
-        
+
         for (const key of keys) {
             const roomId = key.split(':')[1];
             await this.processBatchForRoom(roomId);
@@ -72,10 +72,10 @@ class MessageBatchService {
     async processBatchForRoom(roomId) {
         const redis = await connectRedis();
         const key = `pending_messages:${roomId}`;
-        
+
         const pendingMessages = [];
         let message;
-        
+
         while ((message = await redis.rPop(key))) {
             pendingMessages.push(JSON.parse(message));
             if (pendingMessages.length >= this.maxBatchSize) break;
@@ -89,17 +89,17 @@ class MessageBatchService {
         try {
             const batch = this.db.batch();
             const chunkRef = this.db.collection('rooms').doc(roomId).collection('messageChunks').doc(newChunkId);
-            
+
             const existingChunk = await chunkRef.get();
             const existingMessages = existingChunk.exists ? existingChunk.data().messages || [] : [];
-            
+
             const allMessages = [...existingMessages, ...pendingMessages];
-            
+
             if (allMessages.length > this.maxBatchSize) {
                 const splitPoint = this.maxBatchSize - existingMessages.length;
                 const currentChunkMessages = [...existingMessages, ...pendingMessages.slice(0, splitPoint)];
                 const nextChunkMessages = pendingMessages.slice(splitPoint);
-                
+
                 batch.set(chunkRef, {
                     messages: currentChunkMessages,
                     createdAt: existingChunk.exists ? existingChunk.data().createdAt : new Date().toISOString(),
@@ -111,7 +111,7 @@ class MessageBatchService {
                     const nextChunkNumber = parseInt(newChunkId.split('_')[1]) + 1;
                     const nextChunkId = `chunk_${nextChunkNumber}`;
                     const nextChunkRef = this.db.collection('rooms').doc(roomId).collection('messageChunks').doc(nextChunkId);
-                    
+
                     batch.set(nextChunkRef, {
                         messages: nextChunkMessages,
                         createdAt: new Date().toISOString(),
@@ -122,7 +122,7 @@ class MessageBatchService {
                     await redis.set(`current_chunk:${roomId}`, nextChunkId);
                     await redis.set(`chunk_size:${roomId}:${nextChunkId}`, nextChunkMessages.length);
                 }
-                
+
                 await redis.set(`chunk_size:${roomId}:${newChunkId}`, currentChunkMessages.length);
             } else {
                 batch.set(chunkRef, {
@@ -131,14 +131,14 @@ class MessageBatchService {
                     updatedAt: new Date().toISOString(),
                     messageCount: allMessages.length
                 });
-                
+
                 await redis.set(`chunk_size:${roomId}:${newChunkId}`, allMessages.length);
             }
 
             await batch.commit();
-            
+
             await this.updateRoomMetadata(roomId, pendingMessages[pendingMessages.length - 1]);
-            
+
         } catch (error) {
             console.error('Batch write error:', error);
             for (const msg of pendingMessages) {
@@ -153,11 +153,21 @@ class MessageBatchService {
             lastMessage: {
                 content: lastMessage.c,
                 sender: lastMessage.s,
-                time: lastMessage.t,
+                time: new Date(lastMessage.t).toISOString(),
                 type: lastMessage.ty
             },
-            lastMessageTime: lastMessage.t,
+            lastMessageTime: new Date(lastMessage.t).toISOString(),
+            lastMessageTimestamp: lastMessage.t,
+            lastMessageId: lastMessage.i,
             updatedAt: new Date().toISOString()
+        });
+    }
+
+    async markMessagesAsRead(roomId, userId, lastReadMessageId) {
+        const roomRef = this.db.collection('rooms').doc(roomId);
+        await roomRef.update({
+            [`lastReadMessageId_${userId}`]: lastReadMessageId,
+            [`lastReadTimestamp_${userId}`]: Date.now()
         });
     }
 
@@ -165,7 +175,7 @@ class MessageBatchService {
         const currentChunkId = await this.getCurrentChunkId(roomId);
         const chunkRef = this.db.collection('rooms').doc(roomId).collection('messageChunks').doc(currentChunkId);
         const chunkDoc = await chunkRef.get();
-        
+
         if (chunkDoc.exists) {
             return {
                 id: currentChunkId,
@@ -173,14 +183,14 @@ class MessageBatchService {
                 hasMore: await this.hasOlderChunks(roomId, currentChunkId)
             };
         }
-        
+
         return { id: currentChunkId, messages: [], hasMore: false };
     }
 
     async getChunk(roomId, chunkId) {
         const chunkRef = this.db.collection('rooms').doc(roomId).collection('messageChunks').doc(chunkId);
         const chunkDoc = await chunkRef.get();
-        
+
         if (chunkDoc.exists) {
             return {
                 id: chunkId,
@@ -188,16 +198,16 @@ class MessageBatchService {
                 hasMore: await this.hasOlderChunks(roomId, chunkId)
             };
         }
-        
+
         return null;
     }
 
     async getOlderChunk(roomId, currentChunkId) {
         const currentChunkNumber = parseInt(currentChunkId.split('_')[1]);
         const olderChunkNumber = currentChunkNumber - 1;
-        
+
         if (olderChunkNumber < 1) return null;
-        
+
         const olderChunkId = `chunk_${olderChunkNumber}`;
         return await this.getChunk(roomId, olderChunkId);
     }
@@ -219,8 +229,8 @@ class MessageBatchService {
             id: msg.i || msg.id,
             sender: msg.s || msg.sender,
             content: msg.c || msg.content,
-            time: new Date(msg.t || msg.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            timestamp: msg.t || msg.time,
+            time: new Date(msg.t || msg.timestamp || msg.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            timestamp: msg.t || msg.timestamp || msg.time,
             type: msg.ty || msg.type || 'text',
             fileName: msg.fn || msg.fileName,
             fileSize: msg.fs || msg.fileSize,

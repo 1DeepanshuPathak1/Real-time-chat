@@ -21,11 +21,25 @@ class SocketController {
             socket.on('send-message', async (data) => {
                 const { roomID, message, sender, messageId } = data;
                 try {
-                    this.io.to(roomID).emit('received-message', { 
+                    this.io.to(roomID).emit('received-message', {
                         roomID,
-                        sender, 
+                        sender,
                         message,
-                        messageId 
+                        messageId,
+                        timestamp: data.timestamp
+                    });
+
+                    const roomRef = this.db.collection('rooms').doc(roomID);
+                    const roomDoc = await roomRef.get();
+                    const participants = roomDoc.data()?.participants || [];
+
+                    participants.forEach(participantId => {
+                        if (participantId !== sender) {
+                            this.io.to(participantId).emit('unread-count-update', {
+                                roomId: roomID,
+                                increment: true
+                            });
+                        }
                     });
                 } catch (error) {
                     console.error('Error broadcasting message:', error);
@@ -53,9 +67,8 @@ class SocketController {
             socket.on('mark-messages-read', (data) => {
                 socket.to(data.roomId).emit('message-read', {
                     roomId: data.roomId,
-                    messageIds: data.messageIds,
-                    readBy: data.userEmail,
-                    readTimestamp: data.readTimestamp
+                    lastReadMessageId: data.lastReadMessageId,
+                    readBy: data.userEmail
                 });
             });
 

@@ -87,29 +87,83 @@ function ChatContent() {
     return () => unsubscribe();
   }, [navigate]);
 
-  const getUnreadCount = useCallback(async (contact) => {
-    if (!user || !contact.roomID) return 0;
+  const updateContactUnreadCount = useCallback((roomId, updates) => {
+    setContacts(prevContacts => 
+      prevContacts.map(contact => 
+        contact.roomID === roomId 
+          ? { ...contact, ...updates }
+          : contact
+      )
+    );
+  }, []);
 
-    try {
-      const unreadCount = await chunkedMessageService.getUnreadCount(contact.roomID, user.uid);
-      return unreadCount;
-    } catch (error) {
-      console.error('Error calculating unread count:', error);
-      return 0;
-    }
-  }, [user]);
+  const moveContactToTop = useCallback((roomId) => {
+    setContacts(prevContacts => {
+      const contactIndex = prevContacts.findIndex(c => c.roomID === roomId);
+      if (contactIndex > 0) {
+        const updatedContacts = [...prevContacts];
+        const contact = updatedContacts.splice(contactIndex, 1)[0];
+        contact.lastMessageTime = Date.now();
+        updatedContacts.unshift(contact);
+        return updatedContacts;
+      }
+      return prevContacts;
+    });
+  }, []);
 
   useEffect(() => {
     if (user) {
       const q = query(collection(db, 'users', user.uid, 'contacts'));
       const unsubscribe = onSnapshot(q, async (snapshot) => {
-        const contactsData = snapshot.docs.map(docSnap => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-          unreadCount: 0,
-          lastMessageTime: Date.now()
-        }));
-
+        const contactsData = await Promise.all(
+          snapshot.docs.map(async (contactDoc) => {
+            const contactData = { id: contactDoc.id, ...contactDoc.data() };
+            
+            try {
+              const roomRef = doc(db, 'rooms', contactData.roomID);
+              const roomDoc = await getDoc(roomRef);
+              const roomData = roomDoc.data();
+              const lastMessageTimestamp = roomData?.lastMessageTimestamp || roomData?.lastMessageTime || 0;
+              const lastReadTimestamp = roomData?.[`lastReadTimestamp_${user.uid}`] || 0;
+              const lastMessageId = roomData?.lastMessageId;
+              const lastReadMessageId = roomData?.[`lastReadMessageId_${user.uid}`];
+              
+              let unreadCount = 0;
+              if (lastMessageId && lastMessageId !== lastReadMessageId) {
+                const latestChunk = await chunkedMessageService.getLatestChunk(contactData.roomID);
+                const pendingMessages = await chunkedMessageService.getMessagesFromRedis(contactData.roomID);
+                const allMessages = [...latestChunk.messages, ...pendingMessages];
+                
+                if (lastReadMessageId) {
+                  const lastReadIndex = allMessages.findIndex(msg => msg.id === lastReadMessageId);
+                  if (lastReadIndex !== -1) {
+                    unreadCount = allMessages.slice(lastReadIndex + 1).filter(msg => msg.sender !== user.email).length;
+                  } else {
+                    unreadCount = allMessages.filter(msg => msg.sender !== user.email).length;
+                  }
+                } else {
+                  unreadCount = allMessages.filter(msg => msg.sender !== user.email).length;
+                }
+              }
+              
+              return {
+                ...contactData,
+                unreadCount,
+                lastMessageTime: typeof lastMessageTimestamp === 'string' 
+                  ? new Date(lastMessageTimestamp).getTime() 
+                  : lastMessageTimestamp
+              };
+            } catch (error) {
+              console.error('Error fetching room data:', error);
+              return {
+                ...contactData,
+                unreadCount: 0,
+                lastMessageTime: 0
+              };
+            }
+          })
+        );
+        
         const sortedContacts = contactsData.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
         setContacts(sortedContacts);
       });
@@ -135,7 +189,7 @@ function ChatContent() {
       const loadInitialMessages = async () => {
         try {
           const result = await chunkedMessageService.getLatestMessages(selectedContact.roomID);
-
+          
           console.log('Initial messages loaded:', result.messages.length);
           setMessages(result.messages);
           setCurrentChunkId(result.chunkId);
@@ -144,6 +198,17 @@ function ChatContent() {
           if (result.messages.length === 0) {
             setShowStartMessage(true);
           }
+
+          const roomRef = doc(db, 'rooms', selectedContact.roomID);
+          const roomDoc = await getDoc(roomRef);
+          const lastReadTimestamp = roomDoc.data()?.[`lastReadTimestamp_${user.uid}`] || 0;
+          
+          const firstUnreadIdx = result.messages.findIndex(msg => 
+            msg.sender !== user.email && 
+            (msg.timestamp > lastReadTimestamp)
+          );
+          
+          setFirstUnreadIndex(firstUnreadIdx);
 
           const handleRealtimeMessages = () => {
             const intervalId = setInterval(async () => {
@@ -227,67 +292,46 @@ function ChatContent() {
   };
 
   useEffect(() => {
-    const updateContactsRealTime = () => {
-      if (!user) return;
-
-      const contactsQuery = query(collection(db, 'users', user.uid, 'contacts'));
-      const unsubscribeContacts = onSnapshot(contactsQuery, (snapshot) => {
-        const updatedContacts = snapshot.docs.map(docSnap => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-          unreadCount: 0,
-          lastMessageTime: Date.now()
-        }));
-
-        const sortedContacts = updatedContacts.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
-        setContacts(sortedContacts);
-      });
-
-      return unsubscribeContacts;
-    };
-
-    if (user) {
-      const unsubscribeRealTime = updateContactsRealTime();
-      return () => {
-        if (unsubscribeRealTime) unsubscribeRealTime();
-      };
-    }
-  }, [user]);
-
-  useEffect(() => {
     const unsubscribeMessage = onMessageReceived(async (data) => {
       console.log('Received real-time message:', data);
-
-      if (user) {
-        const contactsQuery = query(collection(db, 'users', user.uid, 'contacts'));
-        const contactsSnapshot = await getDocs(contactsQuery);
-        const updatedContacts = await Promise.all(
-          contactsSnapshot.docs.map(async (doc) => {
-            const contactData = { id: doc.id, ...doc.data() };
-            const unreadCount = await getUnreadCount(contactData);
-
-            const roomRef = doc(db, 'rooms', contactData.roomID);
-            const roomDoc = await getDoc(roomRef);
-            const roomData = roomDoc.data();
-            const lastMessageTime = roomData?.lastMessageTime || 0;
-
-            return {
-              ...contactData,
-              unreadCount,
-              lastMessageTime: new Date(lastMessageTime).getTime()
-            };
-          })
+      
+      if (selectedContact && data.roomID === selectedContact.roomID) {
+        const newMessage = {
+          id: data.messageId || Date.now(),
+          sender: data.sender,
+          content: data.message,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          timestamp: data.timestamp || Date.now(),
+          type: data.type || 'text',
+          fileName: data.fileName
+        };
+        
+        setMessages(prevMessages => {
+          const exists = prevMessages.find(msg => msg.id === newMessage.id);
+          if (exists) return prevMessages;
+          return [...prevMessages, newMessage];
+        });
+      } else {
+        moveContactToTop(data.roomID);
+        
+        setContacts(prevContacts => 
+          prevContacts.map(contact => 
+            contact.roomID === data.roomID 
+              ? { 
+                  ...contact, 
+                  unreadCount: (contact.unreadCount || 0) + 1,
+                  lastMessageTime: Date.now()
+                }
+              : contact
+          )
         );
-
-        const sortedContacts = updatedContacts.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
-        setContacts(sortedContacts);
       }
     });
 
     return () => {
       if (unsubscribeMessage) unsubscribeMessage();
     };
-  }, [onMessageReceived, user]);
+  }, [onMessageReceived, selectedContact, moveContactToTop]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -295,19 +339,19 @@ function ChatContent() {
 
   const scrollToFirstUnreadMessage = useCallback(async () => {
     if (!selectedContact || !user || messages.length === 0 || hasScrolledToUnread) return;
-
+    
     try {
       const roomRef = doc(db, 'rooms', selectedContact.roomID);
       const roomDoc = await getDoc(roomRef);
-      const lastReadTimestamp = roomDoc.data()?.[`lastReadBy_${user.uid}`] || 0;
-
-      const firstUnreadIdx = messages.findIndex(msg =>
-        msg.sender !== user.email &&
-        new Date(msg.timestamp).getTime() > lastReadTimestamp
+      const lastReadTimestamp = roomDoc.data()?.[`lastReadTimestamp_${user.uid}`] || 0;
+      
+      const firstUnreadIdx = messages.findIndex(msg => 
+        msg.sender !== user.email && 
+        (msg.timestamp > lastReadTimestamp)
       );
-
+      
       setFirstUnreadIndex(firstUnreadIdx);
-
+      
       if (firstUnreadIdx !== -1) {
         setTimeout(() => {
           const messageElements = document.querySelectorAll('.message');
@@ -345,6 +389,7 @@ function ChatContent() {
       leaveRoom(selectedContact.roomID);
     }
     setSelectedContact(contact);
+    updateContactUnreadCount(contact.roomID, { unreadCount: 0 });
   };
 
   const handleDocumentClick = (fileUrl) => {
@@ -356,6 +401,13 @@ function ChatContent() {
   const handleThemeChange = (newTheme) => {
     setIsDark(newTheme);
   };
+
+  const handleSendMessageWrapper = useCallback(async (inputMessage, setInputMessage) => {
+    await handleSendMessage(inputMessage, setInputMessage);
+    if (selectedContact) {
+      moveContactToTop(selectedContact.roomID);
+    }
+  }, [handleSendMessage, selectedContact, moveContactToTop]);
 
   if (loading) {
     return (
@@ -379,6 +431,7 @@ function ChatContent() {
           user={user}
           onThemeChange={handleThemeChange}
           isDark={isDark}
+          onContactUpdate={updateContactUnreadCount}
         />
         <div className="chat-window">
           {selectedContact ? (
@@ -432,7 +485,7 @@ function ChatContent() {
               <MessageInput
                 onSubmit={(e) => {
                   e.preventDefault();
-                  handleSendMessage(inputMessage, setInputMessage);
+                  handleSendMessageWrapper(inputMessage, setInputMessage);
                 }}
                 inputMessage={inputMessage}
                 setInputMessage={setInputMessage}

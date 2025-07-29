@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useSocket } from '../../services/SocketService';
 import './css/MessageStatus.css';
 
-const userStatusCache = new Map();
-
 export const MessageStatusIndicator = ({ message, currentUser, selectedContact }) => {
   const [status, setStatus] = useState('sent');
   const { socket } = useSocket();
@@ -14,44 +12,17 @@ export const MessageStatusIndicator = ({ message, currentUser, selectedContact }
   useEffect(() => {
     if (!message || !selectedContact || !currentUser) return;
 
-    const checkMessageStatus = () => {
-      try {
-        if (message.isRead) {
-          setStatus('read');
-          return;
-        }
-        
-        if (message.isDelivered) {
-          setStatus('delivered');
-          return;
-        }
-
-        const contactEmail = selectedContact.email;
-        const contactStatus = userStatusCache.get(contactEmail);
-        
-        if (contactStatus && contactStatus.isOnline) {
-          const messageTimestamp = new Date(message.timestamp).getTime();
-          
-          if (contactStatus.lastSeenTimestamp > messageTimestamp) {
-            setStatus('delivered');
-          }
-        }
-
-      } catch (error) {
-        console.error('Error checking message status:', error);
-        setStatus('sent');
-      }
-    };
-
-    checkMessageStatus();
-    const interval = setInterval(checkMessageStatus, 5000);
-    return () => clearInterval(interval);
+    if (message.isRead) {
+      setStatus('read');
+    } else {
+      setStatus('sent');
+    }
   }, [message, selectedContact, currentUser]);
 
   useEffect(() => {
     if (socket && selectedContact && message) {
       const handleMessageRead = (data) => {
-        if (data.roomId === selectedContact.roomID && data.messageIds.includes(message.id)) {
+        if (data.roomId === selectedContact.roomID && data.lastReadMessageId) {
           setStatus('read');
         }
       };

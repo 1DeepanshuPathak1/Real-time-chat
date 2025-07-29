@@ -134,17 +134,14 @@ class MessageController {
     }
 
     async markMessagesRead(req, res) {
-        const { roomId, userId, readTimestamp } = req.body;
+        const { roomId, userId, lastReadMessageId } = req.body;
 
         try {
-            if (!roomId || !userId || !readTimestamp) {
+            if (!roomId || !userId || !lastReadMessageId) {
                 return res.status(400).json({ error: 'Missing required fields' });
             }
 
-            const roomRef = this.db.collection('rooms').doc(roomId);
-            await roomRef.update({
-                [`lastReadBy_${userId}`]: readTimestamp
-            });
+            await this.batchService.markMessagesAsRead(roomId, userId, lastReadMessageId);
 
             res.status(200).json({ success: true });
         } catch (error) {

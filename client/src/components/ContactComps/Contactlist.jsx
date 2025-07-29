@@ -9,7 +9,7 @@ import '../css/ContactList.css';
 
 const ContactItem = ({ contact, selectedContact, onContactClick, handleContactClick }) => {
   const status = useContactStatus(contact);
-  const unreadCount = contact.unreadCount || contact.unreadMessages || 0;
+  const unreadCount = contact.unreadCount || 0;
 
   return (
     <div
@@ -51,7 +51,7 @@ const generateUserCode = () => {
   return result;
 };
 
-export const ContactList = ({ contacts, selectedContact, onContactClick, user, onThemeChange, isDark }) => {
+export const ContactList = ({ contacts, selectedContact, onContactClick, user, onThemeChange, isDark, onContactUpdate }) => {
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [friendEmail, setFriendEmail] = useState('');
   const [copied, setCopied] = useState(false);
@@ -103,7 +103,7 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
     };
 
     fetchOrCreateUserCode();
-  }, [user?.uid, user?.email]);
+  }, [user?.uid, user?.email, db]);
 
   const {
     showRequests,
@@ -160,7 +160,10 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
 
   const handleContactClick = useCallback((contact) => {
     onContactClick(contact);
-  }, [onContactClick]);
+    if (onContactUpdate) {
+      onContactUpdate(contact.roomID, { unreadCount: 0 });
+    }
+  }, [onContactClick, onContactUpdate]);
 
   const handleFooterToggle = useCallback(() => {
     setShowFooter(prev => !prev);
