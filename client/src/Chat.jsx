@@ -51,13 +51,13 @@ function ChatContent() {
   const [showStartMessage, setShowStartMessage] = useState(false);
   const [hasScrolledToUnread, setHasScrolledToUnread] = useState(false);
   const [firstUnreadIndex, setFirstUnreadIndex] = useState(-1);
+  const [selectedContactStatus, setSelectedContactStatus] = useState({ isOnline: false, lastSeen: 'recently' });
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   const documentInputRef = useRef(null);
   const videoRef = useRef(null);
   const navigate = useNavigate();
-  const selectedContactStatus = useContactStatus(selectedContact);
 
   useUserStatus(user);
 
@@ -126,12 +126,35 @@ function ChatContent() {
               const roomData = roomDoc.data();
               const lastMessageTimestamp = roomData?.lastMessageTimestamp || roomData?.lastMessageTime || 0;
               const lastReadTimestamp = roomData?.[`lastReadTimestamp_${user.uid}`] || 0;
-              const lastMessageId = roomData?.lastMessageId;
               const lastReadMessageId = roomData?.[`lastReadMessageId_${user.uid}`];
               
+              const messagesQuery = query(
+                collection(db, 'rooms', contactData.roomID, 'messages'),
+                orderBy('timestamp', 'desc'),
+                limit(50)
+              );
+              const messagesSnapshot = await getDocs(messagesQuery);
+              
               let unreadCount = 0;
-              if (lastMessageId && lastMessageId !== lastReadMessageId && lastMessageTimestamp > lastReadTimestamp) {
-                unreadCount = 1;
+              if (lastReadMessageId) {
+                let foundLastRead = false;
+                for (const msgDoc of messagesSnapshot.docs) {
+                  const msgData = msgDoc.data();
+                  if (msgData.sender !== user.email) {
+                    if (msgDoc.id === lastReadMessageId) {
+                      foundLastRead = true;
+                      break;
+                    }
+                    if (!foundLastRead) {
+                      unreadCount++;
+                    }
+                  }
+                }
+              } else {
+                unreadCount = messagesSnapshot.docs.filter(doc => 
+                  doc.data().sender !== user.email && 
+                  doc.data().timestamp > lastReadTimestamp
+                ).length;
               }
               
               return {
@@ -375,6 +398,12 @@ function ChatContent() {
     }
   }, [handleSendMessage, selectedContact, moveContactToTop]);
 
+  const handleContactStatusUpdate = useCallback((contactEmail, status) => {
+    if (selectedContact && selectedContact.email === contactEmail) {
+      setSelectedContactStatus(status);
+    }
+  }, [selectedContact]);
+
   if (loading) {
     return (
       <div className="loading-container">
@@ -398,11 +427,16 @@ function ChatContent() {
           onThemeChange={handleThemeChange}
           isDark={isDark}
           onContactUpdate={updateContactUnreadCount}
+          onContactStatusUpdate={handleContactStatusUpdate}
         />
         <div className="chat-window">
           {selectedContact ? (
             <>
-              <ChatHeader selectedContact={selectedContact} isDark={isDark} contactStatus={selectedContactStatus} />
+              <ChatHeader 
+                selectedContact={selectedContact} 
+                isDark={isDark} 
+                contactStatus={selectedContactStatus} 
+              />
               <div className="messages-container" ref={messagesContainerRef} onScroll={handleScroll}>
                 <ParticlesBackground />
                 <div
@@ -419,14 +453,6 @@ function ChatContent() {
                     <div className="loading-spinner"></div>
                   </div>
                 )}
-                {(!hasMoreMessages || messages.length === 0) && (
-                  <div className="conversation-start">
-                    <div className="start-message">
-                      <h3>👋 Say hello to {selectedContact?.name}!</h3>
-                      <p>This is the beginning of your conversation.</p>
-                    </div>
-                  </div>
-                )}
                 <MessageList
                   messages={messages}
                   messagesEndRef={messagesEndRef}
@@ -435,6 +461,7 @@ function ChatContent() {
                   selectedContact={selectedContact}
                   user={user}
                   firstUnreadIndex={firstUnreadIndex}
+                  showStartMessage={!hasMoreMessages || messages.length === 0}
                 />
               </div>
               {showCamera && (

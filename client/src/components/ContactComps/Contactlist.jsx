@@ -7,9 +7,15 @@ import { useContactStatus } from '../UserStatusManager';
 import { UnreadMessageCounter } from '../MessageComps/MessageStatus';
 import '../css/ContactList.css';
 
-const ContactItem = ({ contact, selectedContact, onContactClick, handleContactClick }) => {
+const ContactItem = ({ contact, selectedContact, onContactClick, handleContactClick, onStatusUpdate }) => {
   const status = useContactStatus(contact);
   const unreadCount = contact.unreadCount || 0;
+
+  useEffect(() => {
+    if (onStatusUpdate) {
+      onStatusUpdate(contact.email, status);
+    }
+  }, [status, contact.email, onStatusUpdate]);
 
   return (
     <div
@@ -51,7 +57,7 @@ const generateUserCode = () => {
   return result;
 };
 
-export const ContactList = ({ contacts, selectedContact, onContactClick, user, onThemeChange, isDark, onContactUpdate }) => {
+export const ContactList = ({ contacts, selectedContact, onContactClick, user, onThemeChange, isDark, onContactUpdate, onContactStatusUpdate }) => {
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [friendEmail, setFriendEmail] = useState('');
   const [copied, setCopied] = useState(false);
@@ -169,6 +175,12 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
     setShowFooter(prev => !prev);
   }, []);
 
+  const handleStatusUpdate = useCallback((contactEmail, status) => {
+    if (onContactStatusUpdate) {
+      onContactStatusUpdate(contactEmail, status);
+    }
+  }, [onContactStatusUpdate]);
+
   return (
     <div className={`contact-list ${isDark ? 'dark' : 'light'}`}>
       <div className="contact-list-header">
@@ -248,6 +260,7 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
               selectedContact={selectedContact}
               onContactClick={onContactClick}
               handleContactClick={handleContactClick}
+              onStatusUpdate={handleStatusUpdate}
             />
           ))
         )}

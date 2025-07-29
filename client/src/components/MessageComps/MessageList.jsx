@@ -6,7 +6,7 @@ import { useSocket } from '../../services/SocketService';
 
 const db = getFirestore();
 
-export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, currentUserEmail, selectedContact, user, firstUnreadIndex }) => {
+export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, currentUserEmail, selectedContact, user, firstUnreadIndex, showStartMessage }) => {
   const { socket } = useSocket();
   const lastReadMessageId = useRef(null);
   const hasScrolledToUnread = useRef(false);
@@ -116,6 +116,14 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
 
   return (
     <div className="messages-scroll">
+      {showStartMessage && (
+        <div className="conversation-start">
+          <div className="start-message">
+            <h3>👋 Say hello to {selectedContact?.name}!</h3>
+            <p>This is the beginning of your conversation.</p>
+          </div>
+        </div>
+      )}
       {messages.map((message, index) => (
         <div key={message.id}>
           {index === firstUnreadIndex && firstUnreadIndex !== -1 && (

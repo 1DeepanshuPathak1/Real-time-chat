@@ -6,9 +6,8 @@ const db = getFirestore();
 class ChunkedMessageService {
     constructor() {
         this.cache = new Map();
-        this.unreadCache = new Map();
         this.messagesPerChunk = 50;
-        this.cacheTimeout = 30000;
+        this.cacheTimeout = 300000;
     }
 
     async getLatestMessages(roomId) {
@@ -77,7 +76,7 @@ class ChunkedMessageService {
 
         if (this.cache.has(cacheKey)) {
             const cached = this.cache.get(cacheKey);
-            if (Date.now() - cached.timestamp < 300000) {
+            if (Date.now() - cached.timestamp < this.cacheTimeout) {
                 return cached;
             }
         }
@@ -181,63 +180,10 @@ class ChunkedMessageService {
             }
 
             const result = await response.json();
-            this.clearUnreadCache(roomId);
             return result.messageId;
         } catch (error) {
             console.error('Error sending message:', error);
             throw error;
-        }
-    }
-
-    clearUnreadCache(roomId) {
-        const keysToDelete = [];
-        for (const key of this.unreadCache.keys()) {
-            if (key.includes(roomId)) {
-                keysToDelete.push(key);
-            }
-        }
-        keysToDelete.forEach(key => this.unreadCache.delete(key));
-    }
-
-    async getUnreadCount(roomId, userId) {
-        const cacheKey = `unread_${roomId}_${userId}`;
-        const cached = this.unreadCache.get(cacheKey);
-
-        if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
-            return cached.count;
-        }
-
-        try {
-            const roomRef = doc(db, 'rooms', roomId);
-            const roomDoc = await getDoc(roomRef);
-            const lastReadTimestamp = roomDoc.data()?.[`lastReadBy_${userId}`] || 0;
-
-            const response = await fetch(`${API_BASE_URL}/api/messages/unread-count/${roomId}?lastRead=${lastReadTimestamp}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            });
-
-            if (!response.ok) {
-                if (response.status === 429) {
-                    return cached ? cached.count : 0;
-                }
-                return 0;
-            }
-
-            const data = await response.json();
-            const count = data.count || 0;
-
-            this.unreadCache.set(cacheKey, {
-                count,
-                timestamp: Date.now()
-            });
-
-            return count;
-        } catch (error) {
-            console.error('Error getting unread count:', error);
-            return cached ? cached.count : 0;
         }
     }
 }
