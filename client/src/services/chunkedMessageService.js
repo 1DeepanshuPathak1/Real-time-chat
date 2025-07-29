@@ -46,6 +46,32 @@ class ChunkedMessageService {
         }
     }
 
+    async getLatestChunk(roomId) {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/messages/latest/${roomId}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            return {
+                id: data.id,
+                messages: this.formatMessages(data.messages),
+                hasMore: data.hasMore
+            };
+        } catch (error) {
+            console.error('Error fetching latest chunk:', error);
+            return { id: null, messages: [], hasMore: false };
+        }
+    }
+
     async getOlderMessages(roomId, currentChunkId) {
         const cacheKey = `${roomId}_${currentChunkId}`;
 
@@ -101,6 +127,9 @@ class ChunkedMessageService {
             });
 
             if (!response.ok) {
+                if (response.status === 429) {
+                    return [];
+                }
                 return [];
             }
 
@@ -110,6 +139,10 @@ class ChunkedMessageService {
             console.error('Error fetching pending messages:', error);
             return [];
         }
+    }
+
+    async getMessagesFromRedis(roomId) {
+        return await this.getPendingMessages(roomId);
     }
 
     formatMessages(messages) {
@@ -206,10 +239,6 @@ class ChunkedMessageService {
             console.error('Error getting unread count:', error);
             return cached ? cached.count : 0;
         }
-    }
-    clearUnreadCache(roomId, userId) {
-        const cacheKey = `unread_${roomId}_${userId}`;
-        this.unreadCache.delete(cacheKey);
     }
 }
 
