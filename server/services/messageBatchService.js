@@ -11,12 +11,18 @@ class MessageBatchService {
 
     async addMessageToBatch(roomId, messageData) {
         const redis = await connectRedis();
-        const messageId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const messageId = `${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
         
         const messageWithId = {
-            ...messageData,
-            id: messageId,
-            timestamp: Date.now()
+            i: messageId,
+            s: messageData.sender,
+            c: messageData.content,
+            t: Date.now(),
+            ty: messageData.type || 'text',
+            ...(messageData.fileName && { fn: messageData.fileName }),
+            ...(messageData.fileSize && { fs: messageData.fileSize }),
+            ...(messageData.fileType && { ft: messageData.fileType }),
+            ...(messageData.fileUrl && { fu: messageData.fileUrl })
         };
 
         const key = `pending_messages:${roomId}`;
@@ -145,12 +151,12 @@ class MessageBatchService {
         const roomRef = this.db.collection('rooms').doc(roomId);
         await roomRef.update({
             lastMessage: {
-                content: lastMessage.content,
-                sender: lastMessage.sender,
-                time: lastMessage.time,
-                type: lastMessage.type
+                content: lastMessage.c,
+                sender: lastMessage.s,
+                time: lastMessage.t,
+                type: lastMessage.ty
             },
-            lastMessageTime: lastMessage.time,
+            lastMessageTime: lastMessage.t,
             updatedAt: new Date().toISOString()
         });
     }
@@ -163,7 +169,7 @@ class MessageBatchService {
         if (chunkDoc.exists) {
             return {
                 id: currentChunkId,
-                messages: chunkDoc.data().messages || [],
+                messages: this.formatMessages(chunkDoc.data().messages || []),
                 hasMore: await this.hasOlderChunks(roomId, currentChunkId)
             };
         }
@@ -178,7 +184,7 @@ class MessageBatchService {
         if (chunkDoc.exists) {
             return {
                 id: chunkId,
-                messages: chunkDoc.data().messages || [],
+                messages: this.formatMessages(chunkDoc.data().messages || []),
                 hasMore: await this.hasOlderChunks(roomId, chunkId)
             };
         }
@@ -205,7 +211,22 @@ class MessageBatchService {
         const redis = await connectRedis();
         const key = `pending_messages:${roomId}`;
         const messages = await redis.lRange(key, 0, -1);
-        return messages.map(msg => JSON.parse(msg)).reverse();
+        return this.formatMessages(messages.map(msg => JSON.parse(msg))).reverse();
+    }
+
+    formatMessages(messages) {
+        return messages.map(msg => ({
+            id: msg.i || msg.id,
+            sender: msg.s || msg.sender,
+            content: msg.c || msg.content,
+            time: new Date(msg.t || msg.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            timestamp: msg.t || msg.time,
+            type: msg.ty || msg.type || 'text',
+            fileName: msg.fn || msg.fileName,
+            fileSize: msg.fs || msg.fileSize,
+            fileType: msg.ft || msg.fileType,
+            fileUrl: msg.fu || msg.fileUrl
+        }));
     }
 }
 
