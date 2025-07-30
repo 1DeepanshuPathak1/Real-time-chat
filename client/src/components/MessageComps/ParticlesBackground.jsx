@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import Particles from '@tsparticles/react';
 import { loadFull } from 'tsparticles';
 import { initParticlesEngine } from '@tsparticles/react';
 
-export const ParticlesBackground = () => {
+export const ParticlesBackground = memo(({ isDark = true }) => {
   const [init, setInit] = useState(false);
 
   useEffect(() => {
@@ -13,6 +13,9 @@ export const ParticlesBackground = () => {
       setInit(true);
     });
   }, []);
+
+  const particleColor = isDark ? '#128C7E' : '#3b82f6';
+  const linkColor = isDark ? '#128C7E' : '#3b82f6';
 
   const particlesOptions = {
     fullScreen: { enable: false },
@@ -29,9 +32,9 @@ export const ParticlesBackground = () => {
       },
     },
     particles: {
-      color: { value: '#128C7E' },
+      color: { value: particleColor },
       links: {
-        color: '#128C7E',
+        color: linkColor,
         distance: 150,
         enable: true,
         opacity: 0.5,
@@ -65,4 +68,4 @@ export const ParticlesBackground = () => {
       className="particles-background"
     />
   );
-};
+});

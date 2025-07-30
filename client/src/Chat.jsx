@@ -438,7 +438,7 @@ function ChatContent() {
                 contactStatus={selectedContactStatus} 
               />
               <div className="messages-container" ref={messagesContainerRef} onScroll={handleScroll}>
-                <ParticlesBackground />
+                <ParticlesBackground key={selectedContact?.roomID} isDark={isDark} />
                 <div
                   className={`pull-to-refresh ${isPulling ? 'pulling' : ''}`}
                   style={{ transform: `translateY(${pullDistance}px)` }}
@@ -519,7 +519,7 @@ function ChatContent() {
             </>
           ) : (
             <div className="messages-container">
-              <ParticlesBackground />
+              <ParticlesBackground key="empty-chat" isDark={isDark} />
               <EmptyChat />
             </div>
           )}

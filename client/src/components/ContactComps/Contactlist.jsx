@@ -102,14 +102,18 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
             setUserCode(newUserCode);
           }
         } catch (error) {
-          console.error('Error fetching/creating user code:', error);
-          setUserCode('ERROR');
+          console.error('Error fetching user code:', error);
+          if (userCode === 'LOADING...') {
+            setUserCode('ERROR');
+          }
         }
       }
     };
 
-    fetchOrCreateUserCode();
-  }, [user?.uid, user?.email, db]);
+    if (userCode === 'LOADING...') {
+      fetchOrCreateUserCode();
+    }
+  }, [user?.uid, user?.email, db, userCode]);
 
   const {
     showRequests,
@@ -155,12 +159,24 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
       root.style.setProperty('--secondary-bg', '#242527');
       root.style.setProperty('--border-color', '#1f5953');
       root.style.setProperty('--accent-color', '#128C7E');
+      root.style.setProperty('--chat-bg', '#1a1a1a');
+      root.style.setProperty('--message-bg-sent', 'rgba(18, 140, 126, 0.15)');
+      root.style.setProperty('--message-bg-received', '#242527');
+      root.style.setProperty('--message-time-color', '#ff00ff');
+      root.style.setProperty('--start-message-bg', 'rgba(18, 140, 126, 0.15)');
+      root.style.setProperty('--start-message-border', 'rgba(18, 140, 126, 0.3)');
     } else {
       root.style.setProperty('--bg-color', '#ffffff');
       root.style.setProperty('--text-color', '#1e293b');
       root.style.setProperty('--secondary-bg', '#f1f5f9');
       root.style.setProperty('--border-color', '#e2e8f0');
       root.style.setProperty('--accent-color', '#3b82f6');
+      root.style.setProperty('--chat-bg', '#f8fafc');
+      root.style.setProperty('--message-bg-sent', 'rgba(59, 130, 246, 0.4)');
+      root.style.setProperty('--message-bg-received', '#e2e8f0');
+      root.style.setProperty('--message-time-color', '#484949ff');
+      root.style.setProperty('--start-message-bg', 'rgba(59, 130, 246, 0.15)');
+      root.style.setProperty('--start-message-border', 'rgba(59, 130, 246, 0.3)');
     }
   }, [isDark, onThemeChange]);
 
