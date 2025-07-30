@@ -624,6 +624,7 @@
   font-weight: 600;
   white-space: nowrap;
   min-height: 44px;
+  flex-shrink: 0;
 }
 
 .contact-list.dark .user-code {
