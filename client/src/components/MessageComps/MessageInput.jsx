@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { FiSend, FiMic, FiSmile, FiPaperclip, FiImage, FiCamera, FiFile, FiBarChart2 } from 'react-icons/fi';
 
 export const MessageInput = ({
@@ -13,8 +13,17 @@ export const MessageInput = ({
   setShowAttachMenu,
   fileInputRef,
   documentInputRef,
-  startCamera
+  startCamera,
+  autoFocus = false
 }) => {
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (autoFocus && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [autoFocus]);
+
   return (
     <form onSubmit={onSubmit} className="message-input-container">
       <button
@@ -56,6 +65,7 @@ export const MessageInput = ({
         </div>
       )}
       <input
+        ref={inputRef}
         type="text"
         placeholder="Type a message"
         value={inputMessage}

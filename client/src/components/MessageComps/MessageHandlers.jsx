@@ -4,7 +4,7 @@ import chunkedMessageService from '../../services/chunkedMessageService';
 export const useMessageHandlers = (setMessages, socket, selectedContact, user) => {
   const [isSending, setIsSending] = useState(false);
 
-  const handleSendMessage = async (inputMessage, setInputMessage) => {
+  const handleSendMessage = async (inputMessage, setInputMessage, replyTo = null) => {
     if (!inputMessage.trim() || !selectedContact || !user || isSending) return;
 
     setIsSending(true);
@@ -15,7 +15,8 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
       const messageData = {
         sender: user.email,
         content: messageContent,
-        type: 'text'
+        type: 'text',
+        ...(replyTo && { replyTo })
       };
 
       const messageId = await chunkedMessageService.sendMessage(selectedContact.roomID, messageData);
@@ -26,7 +27,8 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
         content: messageContent,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         timestamp: Date.now(),
-        type: 'text'
+        type: 'text',
+        ...(replyTo && { replyTo })
       };
 
       setMessages(prevMessages => [...prevMessages, newMessage]);
@@ -37,7 +39,8 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
           message: messageContent,
           sender: user.email,
           messageId: messageId,
-          timestamp: newMessage.timestamp
+          timestamp: newMessage.timestamp,
+          ...(replyTo && { replyTo })
         });
       }
 

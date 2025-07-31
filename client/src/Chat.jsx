@@ -4,6 +4,7 @@ import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, query, onSnapshot, orderBy, limit, getDocs, where, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { SocketProvider, useSocket } from './services/SocketService';
 import { EmojiPickerComponent } from './components/MessageComps/EmojiPicker';
+import { ReplyMessage } from './components/MessageComps/ReplyMessage';
 import { ParticlesBackground } from './components/MessageComps/ParticlesBackground';
 import { ContactList } from './components/ContactComps/Contactlist';
 import { ChatHeader } from './components/ContactComps/ChatHeader';
@@ -52,6 +53,7 @@ function ChatContent() {
   const [hasScrolledToUnread, setHasScrolledToUnread] = useState(false);
   const [firstUnreadIndex, setFirstUnreadIndex] = useState(-1);
   const [selectedContactStatus, setSelectedContactStatus] = useState({ isOnline: false, lastSeen: 'recently' });
+  const [replyTo, setReplyTo] = useState(null);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -64,7 +66,6 @@ function ChatContent() {
   const {
     socket,
     isConnected,
-    networkError,
     joinRoom,
     leaveRoom,
     onMessageReceived,
@@ -196,6 +197,7 @@ function ChatContent() {
       setShowStartMessage(false);
       setPullDistance(0);
       setIsPulling(false);
+      setReplyTo(null);
 
       const loadInitialMessages = async () => {
         try {
@@ -292,7 +294,8 @@ function ChatContent() {
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           timestamp: data.timestamp || Date.now(),
           type: data.type || 'text',
-          fileName: data.fileName
+          fileName: data.fileName,
+          replyTo: data.replyTo
         };
         
         setMessages(prevMessages => {
@@ -378,6 +381,7 @@ function ChatContent() {
       leaveRoom(selectedContact.roomID);
     }
     setSelectedContact(contact);
+    setReplyTo(null);
     updateContactUnreadCount(contact.roomID, { unreadCount: 0 });
   };
 
@@ -392,17 +396,31 @@ function ChatContent() {
   };
 
   const handleSendMessageWrapper = useCallback(async (inputMessage, setInputMessage) => {
-    await handleSendMessage(inputMessage, setInputMessage);
+    const messageData = {
+      content: inputMessage,
+      replyTo: replyTo
+    };
+    
+    await handleSendMessage(messageData.content, setInputMessage, messageData.replyTo);
     if (selectedContact) {
       moveContactToTop(selectedContact.roomID);
     }
-  }, [handleSendMessage, selectedContact, moveContactToTop]);
+    setReplyTo(null);
+  }, [handleSendMessage, selectedContact, moveContactToTop, replyTo]);
 
   const handleContactStatusUpdate = useCallback((contactEmail, status) => {
     if (selectedContact && selectedContact.email === contactEmail) {
       setSelectedContactStatus(status);
     }
   }, [selectedContact]);
+
+  const handleReply = (message) => {
+    setReplyTo(message);
+  };
+
+  const handleCancelReply = () => {
+    setReplyTo(null);
+  };
 
   if (loading) {
     return (
@@ -462,6 +480,8 @@ function ChatContent() {
                   user={user}
                   firstUnreadIndex={firstUnreadIndex}
                   showStartMessage={!hasMoreMessages || messages.length === 0}
+                  isDark={isDark}
+                  onReply={handleReply}
                 />
               </div>
               {showCamera && (
@@ -473,6 +493,12 @@ function ChatContent() {
                     setShowCamera(false);
                   }}
                   stream={stream}
+                />
+              )}
+              {replyTo && (
+                <ReplyMessage
+                  replyTo={replyTo}
+                  onCancel={handleCancelReply}
                 />
               )}
               <MessageInput
@@ -525,11 +551,6 @@ function ChatContent() {
           )}
         </div>
       </div>
-      {networkError && (
-        <div className="network-error-banner">
-          Connection lost. Attempting to reconnect...
-        </div>
-      )}
     </div>
   );
 }
