@@ -135,41 +135,59 @@ export const MessageContextMenu = ({
   };
 
   const handleEmojiReact = async (targetMessage, emoji) => {
-    console.log('handleEmojiReact called with:', { targetMessage, emoji, selectedContact, user });
-    
     if (!targetMessage || !emoji || !selectedContact || !user) {
-      console.log('Missing required data for emoji reaction');
       return;
     }
 
-    const currentReaction = messageReactions[targetMessage.id];
-    let newReaction = null;
+    const currentReactions = messageReactions[targetMessage.id] || {};
+    let newReactions = { ...currentReactions };
 
-    if (currentReaction && currentReaction.emoji === emoji && currentReaction.userId === user.uid) {
-      newReaction = null;
-    } else {
-      newReaction = {
-        emoji: emoji,
-        userId: user.uid,
-        userEmail: user.email,
-        timestamp: Date.now()
-      };
+    let userReacted = false;
+    for (const [reactionEmoji, users] of Object.entries(currentReactions)) {
+      if (users.includes(user.displayName || user.email)) {
+        if (reactionEmoji === emoji) {
+          newReactions[reactionEmoji] = users.filter(u => u !== (user.displayName || user.email));
+          if (newReactions[reactionEmoji].length === 0) {
+            delete newReactions[reactionEmoji];
+          }
+          userReacted = true;
+        } else {
+          newReactions[reactionEmoji] = users.filter(u => u !== (user.displayName || user.email));
+          if (newReactions[reactionEmoji].length === 0) {
+            delete newReactions[reactionEmoji];
+          }
+        }
+        break;
+      }
     }
 
-    console.log('Setting new reaction:', newReaction);
+    if (!userReacted) {
+      if (newReactions[emoji]) {
+        if (!newReactions[emoji].includes(user.displayName || user.email)) {
+          newReactions[emoji].push(user.displayName || user.email);
+        }
+      } else {
+        newReactions[emoji] = [user.displayName || user.email];
+      }
+
+      if (Object.keys(newReactions).length > 2) {
+        const reactionKeys = Object.keys(newReactions);
+        const oldestReaction = reactionKeys[0];
+        delete newReactions[oldestReaction];
+      }
+    }
 
     setMessageReactions(prev => ({
       ...prev,
-      [targetMessage.id]: newReaction
+      [targetMessage.id]: newReactions
     }));
 
     try {
       const messageData = {
         messageId: targetMessage.id,
         emoji: emoji,
-        userId: user.uid,
-        userEmail: user.email,
-        timestamp: Date.now()
+        userName: user.displayName || user.email,
+        remove: userReacted
       };
 
       await chunkedMessageService.addReactionToMessage(selectedContact.roomID, messageData);
@@ -178,10 +196,8 @@ export const MessageContextMenu = ({
         socket.emit('message-reaction', {
           roomId: selectedContact.roomID,
           messageId: targetMessage.id,
-          reaction: newReaction,
-          userId: user.uid,
-          userEmail: user.email,
-          timestamp: Date.now()
+          reactions: newReactions,
+          userName: user.displayName || user.email
         });
       }
 
@@ -189,7 +205,7 @@ export const MessageContextMenu = ({
       console.error('Error handling emoji reaction:', error);
       setMessageReactions(prev => ({
         ...prev,
-        [targetMessage.id]: currentReaction
+        [targetMessage.id]: currentReactions
       }));
     }
   };
@@ -200,7 +216,6 @@ export const MessageContextMenu = ({
   };
 
   const handleEmojiClick = (emojiObject) => {
-    console.log('Emoji clicked:', emojiObject);
     if (emojiObject && emojiObject.emoji && message) {
       handleEmojiReact(message, emojiObject.emoji);
     }

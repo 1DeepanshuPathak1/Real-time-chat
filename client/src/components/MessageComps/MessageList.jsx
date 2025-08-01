@@ -11,7 +11,7 @@ import './css/MessageReactions.css';
 
 const db = getFirestore();
 
-export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, currentUserEmail, selectedContact, user, firstUnreadIndex, showStartMessage, isDark, onReply }) => {
+export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, currentUserEmail, selectedContact, user, firstUnreadIndex, showStartMessage, isDark, onReply, contacts }) => {
   const { socket } = useSocket();
   const lastReadMessageId = useRef(null);
   const hasScrolledToUnread = useRef(false);
@@ -44,8 +44,8 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
       
       const reactions = {};
       messages.forEach(message => {
-        if (message.em || message.e) {
-          reactions[message.id] = message.em || message.e;
+        if (message.em) {
+          reactions[message.id] = message.em;
         }
       });
       setMessageReactions(reactions);
@@ -153,7 +153,7 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
         if (data.roomId === selectedContact?.roomID) {
           setMessageReactions(prev => ({
             ...prev,
-            [data.messageId]: data.reaction
+            [data.messageId]: data.reactions
           }));
         }
       };
@@ -235,41 +235,91 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
     return messages.find(msg => msg.id === replyToId);
   };
 
-  const renderReaction = (message) => {
-    const reaction = messageReactions[message.id];
+  const renderReactions = (message) => {
+    const reactions = messageReactions[message.id];
     
-    if (!reaction) return null;
+    if (!reactions || Object.keys(reactions).length === 0) return null;
 
-    const isOwn = reaction.userId === user.uid;
+    const reactionElements = Object.entries(reactions).map(([emoji, users], index) => {
+      if (!users || users.length === 0) return null;
+
+      const isOwn = users.includes(user.displayName || user.email);
+      const count = users.length;
+      const formatUserName = (userIdentifier) => {
+        if (userIdentifier === (user.displayName || user.email)) {
+          return 'You';
+        }
+        
+        const contact = contacts?.find(c => c.email === userIdentifier);
+        if (contact) {
+          return contact.name;
+        }
+        
+        if (userIdentifier === selectedContact?.email) {
+          return selectedContact.name;
+        }
+        
+        return userIdentifier;
+      };
+
+      const tooltipText = count === 1 
+        ? `${formatUserName(users[0])} reacted with ${emoji}`
+        : users.length === 2
+          ? `${users.map(formatUserName).join(' and ')} reacted with ${emoji}`
+          : `${users.slice(0, -1).map(formatUserName).join(', ')} and ${formatUserName(users[users.length - 1])} reacted with ${emoji}`;
+
+      return (
+        <div 
+          key={`${emoji}-${index}`}
+          className={`message-reaction ${isOwn ? 'own-reaction' : 'other-reaction'} ${isDark ? 'dark-theme' : 'light-theme'}`}
+          onClick={() => isOwn && handleReactionClick(message, emoji)}
+          title={tooltipText}
+          style={{ cursor: isOwn ? 'pointer' : 'default' }}
+        >
+          <span className="reaction-emoji">{emoji}</span>
+          {count > 1 && <span className="reaction-count">{count}</span>}
+        </div>
+      );
+    }).filter(Boolean);
+
+    if (reactionElements.length === 0) return null;
 
     return (
-      <div 
-        className={`message-reaction ${isOwn ? 'own-reaction' : 'other-reaction'}`}
-        onClick={() => isOwn && handleReactionClick(message, reaction)}
-        title={`${isOwn ? 'You' : reaction.userEmail} reacted with ${reaction.emoji}`}
-        style={{ cursor: isOwn ? 'pointer' : 'default' }}
-      >
-        <span className="reaction-emoji">{reaction.emoji}</span>
+      <div className="message-reactions-container">
+        {reactionElements}
       </div>
     );
   };
 
-  const handleReactionClick = async (message, reaction) => {
-    if (!message || !reaction || !selectedContact || !user) return;
-    if (reaction.userId !== user.uid) return;
+  const handleReactionClick = async (message, emoji) => {
+    if (!message || !emoji || !selectedContact || !user) return;
+
+    const currentReactions = messageReactions[message.id] || {};
+    const users = currentReactions[emoji] || [];
+    const userName = user.displayName || user.email;
+    
+    if (!users.includes(userName)) return;
+
+    const newUsers = users.filter(u => u !== userName);
+    const newReactions = { ...currentReactions };
+    
+    if (newUsers.length === 0) {
+      delete newReactions[emoji];
+    } else {
+      newReactions[emoji] = newUsers;
+    }
 
     setMessageReactions(prev => ({
       ...prev,
-      [message.id]: null
+      [message.id]: newReactions
     }));
 
     try {
       const messageData = {
         messageId: message.id,
-        emoji: reaction.emoji,
-        userId: user.uid,
-        userEmail: user.email,
-        timestamp: Date.now()
+        emoji: emoji,
+        userName: userName,
+        remove: true
       };
 
       await chunkedMessageService.addReactionToMessage(selectedContact.roomID, messageData);
@@ -278,10 +328,8 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
         socket.emit('message-reaction', {
           roomId: selectedContact.roomID,
           messageId: message.id,
-          reaction: null,
-          userId: user.uid,
-          userEmail: user.email,
-          timestamp: Date.now()
+          reactions: newReactions,
+          userName: userName
         });
       }
 
@@ -289,7 +337,7 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
       console.error('Error removing emoji reaction:', error);
       setMessageReactions(prev => ({
         ...prev,
-        [message.id]: reaction
+        [message.id]: currentReactions
       }));
     }
   };
@@ -377,7 +425,7 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
                   selectedContact={selectedContact}
                 />
               </div>
-              {renderReaction(message)}
+              {renderReactions(message)}
             </div>
           </div>
         </div>

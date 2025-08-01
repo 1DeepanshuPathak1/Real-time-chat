@@ -182,7 +182,7 @@ class ChunkedMessageService {
                 fileType: msg.ft || msg.fileType,
                 fileUrl: msg.fu || msg.fileUrl,
                 replyTo: msg.r || msg.replyTo,
-                em: msg.em || msg.e
+                em: msg.em
             };
         });
     }

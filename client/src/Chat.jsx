@@ -90,9 +90,9 @@ function ChatContent() {
   }, [navigate]);
 
   const updateContactUnreadCount = useCallback((roomId, updates) => {
-    setContacts(prevContacts => 
-      prevContacts.map(contact => 
-        contact.roomID === roomId 
+    setContacts(prevContacts =>
+      prevContacts.map(contact =>
+        contact.roomID === roomId
           ? { ...contact, ...updates }
           : contact
       )
@@ -120,7 +120,7 @@ function ChatContent() {
         const contactsData = await Promise.all(
           snapshot.docs.map(async (contactDoc) => {
             const contactData = { id: contactDoc.id, ...contactDoc.data() };
-            
+
             try {
               const roomRef = doc(db, 'rooms', contactData.roomID);
               const roomDoc = await getDoc(roomRef);
@@ -128,14 +128,14 @@ function ChatContent() {
               const lastMessageTimestamp = roomData?.lastMessageTimestamp || roomData?.lastMessageTime || 0;
               const lastReadTimestamp = roomData?.[`lastReadTimestamp_${user.uid}`] || 0;
               const lastReadMessageId = roomData?.[`lastReadMessageId_${user.uid}`];
-              
+
               const messagesQuery = query(
                 collection(db, 'rooms', contactData.roomID, 'messages'),
                 orderBy('timestamp', 'desc'),
                 limit(50)
               );
               const messagesSnapshot = await getDocs(messagesQuery);
-              
+
               let unreadCount = 0;
               if (lastReadMessageId) {
                 let foundLastRead = false;
@@ -152,17 +152,17 @@ function ChatContent() {
                   }
                 }
               } else {
-                unreadCount = messagesSnapshot.docs.filter(doc => 
-                  doc.data().sender !== user.email && 
+                unreadCount = messagesSnapshot.docs.filter(doc =>
+                  doc.data().sender !== user.email &&
                   doc.data().timestamp > lastReadTimestamp
                 ).length;
               }
-              
+
               return {
                 ...contactData,
                 unreadCount,
-                lastMessageTime: typeof lastMessageTimestamp === 'string' 
-                  ? new Date(lastMessageTimestamp).getTime() 
+                lastMessageTime: typeof lastMessageTimestamp === 'string'
+                  ? new Date(lastMessageTimestamp).getTime()
                   : lastMessageTimestamp
               };
             } catch (error) {
@@ -175,7 +175,7 @@ function ChatContent() {
             }
           })
         );
-        
+
         const sortedContacts = contactsData.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
         setContacts(sortedContacts);
       });
@@ -202,7 +202,7 @@ function ChatContent() {
       const loadInitialMessages = async () => {
         try {
           const result = await chunkedMessageService.getLatestMessages(selectedContact.roomID);
-          
+
           console.log('Initial messages loaded:', result.messages.length);
           setMessages(result.messages);
           setCurrentChunkId(result.chunkId);
@@ -215,12 +215,12 @@ function ChatContent() {
           const roomRef = doc(db, 'rooms', selectedContact.roomID);
           const roomDoc = await getDoc(roomRef);
           const lastReadTimestamp = roomDoc.data()?.[`lastReadTimestamp_${user.uid}`] || 0;
-          
-          const firstUnreadIdx = result.messages.findIndex(msg => 
-            msg.sender !== user.email && 
+
+          const firstUnreadIdx = result.messages.findIndex(msg =>
+            msg.sender !== user.email &&
             (msg.timestamp > lastReadTimestamp)
           );
-          
+
           setFirstUnreadIndex(firstUnreadIdx);
 
         } catch (error) {
@@ -285,7 +285,7 @@ function ChatContent() {
   useEffect(() => {
     const unsubscribeMessage = onMessageReceived(async (data) => {
       console.log('Received real-time message:', data);
-      
+
       if (selectedContact && data.roomID === selectedContact.roomID) {
         const newMessage = {
           id: data.messageId || Date.now(),
@@ -297,7 +297,7 @@ function ChatContent() {
           fileName: data.fileName,
           replyTo: data.replyTo
         };
-        
+
         setMessages(prevMessages => {
           const exists = prevMessages.find(msg => msg.id === newMessage.id);
           if (exists) return prevMessages;
@@ -305,15 +305,15 @@ function ChatContent() {
         });
       } else {
         moveContactToTop(data.roomID);
-        
-        setContacts(prevContacts => 
-          prevContacts.map(contact => 
-            contact.roomID === data.roomID 
-              ? { 
-                  ...contact, 
-                  unreadCount: (contact.unreadCount || 0) + 1,
-                  lastMessageTime: Date.now()
-                }
+
+        setContacts(prevContacts =>
+          prevContacts.map(contact =>
+            contact.roomID === data.roomID
+              ? {
+                ...contact,
+                unreadCount: (contact.unreadCount || 0) + 1,
+                lastMessageTime: Date.now()
+              }
               : contact
           )
         );
@@ -331,19 +331,19 @@ function ChatContent() {
 
   const scrollToFirstUnreadMessage = useCallback(async () => {
     if (!selectedContact || !user || messages.length === 0 || hasScrolledToUnread) return;
-    
+
     try {
       const roomRef = doc(db, 'rooms', selectedContact.roomID);
       const roomDoc = await getDoc(roomRef);
       const lastReadTimestamp = roomDoc.data()?.[`lastReadTimestamp_${user.uid}`] || 0;
-      
-      const firstUnreadIdx = messages.findIndex(msg => 
-        msg.sender !== user.email && 
+
+      const firstUnreadIdx = messages.findIndex(msg =>
+        msg.sender !== user.email &&
         (msg.timestamp > lastReadTimestamp)
       );
-      
+
       setFirstUnreadIndex(firstUnreadIdx);
-      
+
       if (firstUnreadIdx !== -1) {
         setTimeout(() => {
           const messageElements = document.querySelectorAll('.message');
@@ -400,7 +400,7 @@ function ChatContent() {
       content: inputMessage,
       replyTo: replyTo
     };
-    
+
     await handleSendMessage(messageData.content, setInputMessage, messageData.replyTo);
     if (selectedContact) {
       moveContactToTop(selectedContact.roomID);
@@ -450,10 +450,10 @@ function ChatContent() {
         <div className="chat-window">
           {selectedContact ? (
             <>
-              <ChatHeader 
-                selectedContact={selectedContact} 
-                isDark={isDark} 
-                contactStatus={selectedContactStatus} 
+              <ChatHeader
+                selectedContact={selectedContact}
+                isDark={isDark}
+                contactStatus={selectedContactStatus}
               />
               <div className="messages-container" ref={messagesContainerRef} onScroll={handleScroll}>
                 <ParticlesBackground key={selectedContact?.roomID} isDark={isDark} />
@@ -482,6 +482,7 @@ function ChatContent() {
                   showStartMessage={!hasMoreMessages || messages.length === 0}
                   isDark={isDark}
                   onReply={handleReply}
+                  contacts={contacts}
                 />
               </div>
               {showCamera && (
