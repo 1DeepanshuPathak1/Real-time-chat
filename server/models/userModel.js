@@ -27,7 +27,6 @@ class UserModel {
 
     async addNewUser(userDetails) {
         try {
-            // Check if user already exists
             const existingUser = await this.db.collection(this.collection)
                 .where('email', '==', userDetails.email)
                 .get();
@@ -36,23 +35,23 @@ class UserModel {
                 return { message: 'User already exists', code: 'auth/email-already-exists' };
             }
 
-            // Generate unique user code
             let userCode;
             let codeExists = true;
             while (codeExists) {
                 userCode = await this.generateUserCode();
-                const existingUser = await this.db.collection(this.collection)
+                const existingCodeCheck = await this.db.collection(this.collection)
                     .where('userCode', '==', userCode)
                     .get();
-                codeExists = !existingUser.empty;
+                codeExists = !existingCodeCheck.empty;
             }
 
-            // Create user document with uid as document ID
             await this.db.collection(this.collection).doc(userDetails.uid).set({
                 name: userDetails.name,
                 email: userDetails.email,
                 userCode: userCode,
-                createdAt: new Date().toISOString()
+                createdAt: new Date().toISOString(),
+                isOnline: false,
+                lastSeenTimestamp: Date.now()
             });
 
             return { message: 'success' };
@@ -64,7 +63,7 @@ class UserModel {
     async generateUserCode() {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         let result = '';
-        for (let i = 0; i < 6; i++) {
+        for (let i = 0; i < 8; i++) {
             result += chars.charAt(Math.floor(Math.random() * chars.length));
         }
         return result;
@@ -99,22 +98,37 @@ class UserModel {
     }
 
     async findUserByEmail(email) {
-        const userQuery = await this.db.collection(this.collection)
-            .where('email', '==', email)
-            .get();
-        return userQuery.empty ? null : { id: userQuery.docs[0].id, ...userQuery.docs[0].data() };
+        try {
+            const userQuery = await this.db.collection(this.collection)
+                .where('email', '==', email)
+                .get();
+            return userQuery.empty ? null : { id: userQuery.docs[0].id, ...userQuery.docs[0].data() };
+        } catch (error) {
+            console.error('Error finding user by email:', error);
+            return null;
+        }
     }
 
     async findUserByCode(code) {
-        const userQuery = await this.db.collection(this.collection)
-            .where('userCode', '==', code.toUpperCase())
-            .get();
-        return userQuery.empty ? null : { id: userQuery.docs[0].id, ...userQuery.docs[0].data() };
+        try {
+            const userQuery = await this.db.collection(this.collection)
+                .where('userCode', '==', code.toUpperCase())
+                .get();
+            return userQuery.empty ? null : { id: userQuery.docs[0].id, ...userQuery.docs[0].data() };
+        } catch (error) {
+            console.error('Error finding user by code:', error);
+            return null;
+        }
     }
 
     async getUserById(userId) {
-        const userDoc = await this.db.collection(this.collection).doc(userId).get();
-        return userDoc.exists ? { id: userDoc.id, ...userDoc.data() } : null;
+        try {
+            const userDoc = await this.db.collection(this.collection).doc(userId).get();
+            return userDoc.exists ? { id: userDoc.id, ...userDoc.data() } : null;
+        } catch (error) {
+            console.error('Error getting user by id:', error);
+            return null;
+        }
     }
 }
 

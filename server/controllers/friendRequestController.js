@@ -14,22 +14,47 @@ class FriendRequestController {
                 return res.status(400).json({ error: 'Missing senderId or recipientIdentifier' });
             }
 
-            await this.userModel.ensureUserCode(senderId);
-            const sender = await this.userModel.getUserById(senderId);
-            
-            if (!sender) {
+            const senderDoc = await this.db.collection('users').doc(senderId).get();
+            if (!senderDoc.exists) {
                 return res.status(404).json({ error: 'Sender not found' });
             }
+            
+            const senderData = senderDoc.data();
+            if (!senderData || !senderData.name || !senderData.email) {
+                return res.status(400).json({ error: 'Invalid sender data' });
+            }
+            
+            const sender = { id: senderDoc.id, ...senderData };
 
             let recipient;
+            let recipientData;
+            
             if (recipientIdentifier.includes('@')) {
-                recipient = await this.userModel.findUserByEmail(recipientIdentifier);
+                const recipientQuery = await this.db.collection('users')
+                    .where('email', '==', recipientIdentifier)
+                    .get();
+                
+                if (recipientQuery.empty) {
+                    return res.status(404).json({ error: 'User not found' });
+                }
+                
+                recipientData = recipientQuery.docs[0].data();
+                recipient = { id: recipientQuery.docs[0].id, ...recipientData };
             } else {
-                recipient = await this.userModel.findUserByCode(recipientIdentifier);
+                const recipientQuery = await this.db.collection('users')
+                    .where('userCode', '==', recipientIdentifier.toUpperCase())
+                    .get();
+                
+                if (recipientQuery.empty) {
+                    return res.status(404).json({ error: 'User not found' });
+                }
+                
+                recipientData = recipientQuery.docs[0].data();
+                recipient = { id: recipientQuery.docs[0].id, ...recipientData };
             }
 
-            if (!recipient) {
-                return res.status(404).json({ error: 'User not found' });
+            if (!recipientData || !recipientData.name || !recipientData.email) {
+                return res.status(400).json({ error: 'Invalid recipient data' });
             }
 
             if (senderId === recipient.id) {
@@ -53,16 +78,16 @@ class FriendRequestController {
 
             await this.db.collection('users').doc(recipient.id).collection('friendRequests').doc(senderId).set({
                 senderId: senderId,
-                senderName: sender.name,
-                senderEmail: sender.email,
+                senderName: senderData.name,
+                senderEmail: senderData.email,
                 timestamp: new Date().toISOString(),
                 status: 'pending'
             });
 
             this.io.to(recipient.id).emit('friend-request-received', {
                 senderId: senderId,
-                senderName: sender.name,
-                senderEmail: sender.email,
+                senderName: senderData.name,
+                senderEmail: senderData.email,
                 timestamp: new Date().toISOString()
             });
 
@@ -87,28 +112,43 @@ class FriendRequestController {
             }
 
             if (response === 'accept') {
-                const user = await this.userModel.getUserById(userId);
-                const sender = await this.userModel.getUserById(senderId);
+                const userDoc = await this.db.collection('users').doc(userId).get();
+                const senderDoc = await this.db.collection('users').doc(senderId).get();
+                
+                if (!userDoc.exists || !senderDoc.exists) {
+                    return res.status(404).json({ error: 'User not found' });
+                }
+                
+                const userData = userDoc.data();
+                const senderData = senderDoc.data();
+                
+                if (!userData || !userData.name || !userData.email || !senderData || !senderData.name || !senderData.email) {
+                    return res.status(400).json({ error: 'Invalid user data' });
+                }
+                
+                const user = { id: userDoc.id, ...userData };
+                const sender = { id: senderDoc.id, ...senderData };
+                
                 const roomId = await this.roomModel.createRoom(userId, senderId);
 
                 await this.db.collection('users').doc(userId).collection('contacts').doc(senderId).set({
-                    name: sender.name,
-                    email: sender.email,
+                    name: senderData.name,
+                    email: senderData.email,
                     roomID: roomId,
                     unreadCount: 0
                 });
 
                 await this.db.collection('users').doc(senderId).collection('contacts').doc(userId).set({
-                    name: user.name,
-                    email: user.email,
+                    name: userData.name,
+                    email: userData.email,
                     roomID: roomId,
                     unreadCount: 0
                 });
 
                 this.io.to(senderId).emit('friend-request-accepted', {
                     userId: userId,
-                    userName: user.name,
-                    userEmail: user.email,
+                    userName: userData.name,
+                    userEmail: userData.email,
                     roomId: roomId
                 });
             }
