@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FiCornerUpLeft, FiInfo, FiCopy, FiSmile } from 'react-icons/fi';
+import { FiCornerUpLeft, FiInfo, FiCopy, FiPlus } from 'react-icons/fi';
 import { EmojiPickerComponent } from './EmojiPicker';
 import './css/MessageContextMenu.css';
 
@@ -17,13 +17,18 @@ export const MessageContextMenu = ({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [emojiPickerPosition, setEmojiPickerPosition] = useState({ x: 0, y: 0 });
   const menuRef = useRef(null);
-  const emojiButtonRef = useRef(null);
+  const plusButtonRef = useRef(null);
+
+  const quickEmojis = ['❤️', '😂', '😮', '😢', '😡'];
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
-        onClose();
-        setShowEmojiPicker(false);
+        const emojiPicker = document.querySelector('.context-emoji-picker');
+        if (!emojiPicker || !emojiPicker.contains(event.target)) {
+          onClose();
+          setShowEmojiPicker(false);
+        }
       }
     };
 
@@ -38,6 +43,54 @@ export const MessageContextMenu = ({
       setShowEmojiPicker(false);
     }
   }, [show]);
+
+  const calculateEmojiPickerPosition = () => {
+    if (!plusButtonRef.current) return;
+
+    const buttonRect = plusButtonRef.current.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const pickerWidth = 320;
+    const pickerHeight = 400;
+    const margin = 10;
+    
+    let pickerX = buttonRect.right + margin;
+    let pickerY = buttonRect.top - margin;
+    
+    // Check if picker goes off right edge
+    if (pickerX + pickerWidth > viewportWidth - margin) {
+      // Position to the left of the button
+      pickerX = buttonRect.left - pickerWidth - margin;
+      
+      // If still off-screen, position relative to viewport
+      if (pickerX < margin) {
+        pickerX = viewportWidth - pickerWidth - margin;
+      }
+    }
+    
+    // Check if picker goes off bottom edge
+    if (pickerY + pickerHeight > viewportHeight - margin) {
+      // Position above the button
+      pickerY = buttonRect.bottom - pickerHeight + margin;
+      
+      // If still doesn't fit, position from bottom of viewport
+      if (pickerY < margin) {
+        pickerY = viewportHeight - pickerHeight - margin;
+      }
+    }
+    
+    // Ensure picker doesn't go above viewport
+    if (pickerY < margin) {
+      pickerY = margin;
+    }
+    
+    // Ensure picker doesn't go left of viewport
+    if (pickerX < margin) {
+      pickerX = margin;
+    }
+    
+    setEmojiPickerPosition({ x: pickerX, y: pickerY });
+  };
 
   if (!show) return null;
 
@@ -61,80 +114,72 @@ export const MessageContextMenu = ({
     onClose();
   };
 
+  const handleQuickEmoji = (emoji) => {
+    onEmojiReact(message, emoji);
+    onClose();
+  };
+
   const handleEmojiClick = (emojiObject) => {
     onEmojiReact(message, emojiObject.emoji);
     setShowEmojiPicker(false);
     onClose();
   };
 
-  const toggleEmojiPicker = (e) => {
+  const handlePlusClick = (e) => {
     e.stopPropagation();
-    
-    if (!showEmojiPicker && emojiButtonRef.current) {
-      const buttonRect = emojiButtonRef.current.getBoundingClientRect();
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-      const pickerWidth = 320;
-      const pickerHeight = 400;
-      
-      let pickerX = buttonRect.right + 10;
-      let pickerY = buttonRect.top;
-      
-      if (pickerX + pickerWidth > viewportWidth) {
-        pickerX = buttonRect.left - pickerWidth - 10;
-      }
-      
-      if (pickerY + pickerHeight > viewportHeight) {
-        pickerY = viewportHeight - pickerHeight - 10;
-      }
-      
-      if (pickerX < 10) {
-        pickerX = 10;
-      }
-      
-      if (pickerY < 10) {
-        pickerY = 10;
-      }
-      
-      setEmojiPickerPosition({ x: pickerX, y: pickerY });
+    if (!showEmojiPicker) {
+      calculateEmojiPickerPosition();
     }
-    
     setShowEmojiPicker(!showEmojiPicker);
   };
 
   return (
-    <div
-      ref={menuRef}
-      className="message-context-menu"
-      style={{
-        left: position.x,
-        top: position.y,
-      }}
-    >
-      <div className="context-menu-content">
-        <button className="context-menu-item" onClick={handleReply}>
-          <FiCornerUpLeft className="context-menu-icon" />
-          <span>Reply</span>
-        </button>
-        
-        <button 
-          ref={emojiButtonRef}
-          className="context-menu-item" 
-          onClick={toggleEmojiPicker}
-        >
-          <FiSmile className="context-menu-icon" />
-          <span>React</span>
-        </button>
-        
-        <button className="context-menu-item" onClick={handleShowInfo}>
-          <FiInfo className="context-menu-icon" />
-          <span>Info</span>
-        </button>
-        
-        <button className="context-menu-item" onClick={handleCopy}>
-          <FiCopy className="context-menu-icon" />
-          <span>Copy</span>
-        </button>
+    <>
+      <div
+        ref={menuRef}
+        className="message-context-menu"
+        style={{
+          left: position.x,
+          top: position.y,
+        }}
+      >
+        <div className="context-menu-content">
+          <div className="quick-reactions">
+            {quickEmojis.map((emoji, index) => (
+              <button
+                key={index}
+                className="quick-emoji-btn"
+                onClick={() => handleQuickEmoji(emoji)}
+              >
+                {emoji}
+              </button>
+            ))}
+            <button
+              ref={plusButtonRef}
+              className="plus-emoji-btn"
+              onClick={handlePlusClick}
+            >
+              <FiPlus />
+            </button>
+          </div>
+          
+          <div className="context-menu-divider"></div>
+          
+          <button className="context-menu-item" onClick={handleReply}>
+            <FiCornerUpLeft className="context-menu-icon" />
+            <span>Reply</span>
+          </button>
+          
+          <button className="context-menu-item" onClick={handleShowInfo}>
+            <FiInfo className="context-menu-icon" />
+            <span>Info</span>
+          </button>
+          
+          <button className="context-menu-item" onClick={handleCopy}>
+            <FiCopy className="context-menu-icon" />
+            <span>Copy</span>
+          </button>
+        </div>
       </div>
       
       {showEmojiPicker && (
@@ -155,6 +200,6 @@ export const MessageContextMenu = ({
           />
         </div>
       )}
-    </div>
+    </>
   );
 };
