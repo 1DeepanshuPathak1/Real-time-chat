@@ -33,9 +33,7 @@ class MessageBatchService {
         return messageId;
     }
 
-    async addReactionToMessage(roomId, messageId, emoji, userId, userEmail) {
-        const redis = await connectRedis();
-        
+    async addReactionToMessage(roomId, messageId, emoji, userName, remove = false) {
         try {
             const chunkRef = await this.findMessageChunk(roomId, messageId);
             if (!chunkRef) {
@@ -56,25 +54,44 @@ class MessageBatchService {
             }
 
             const message = messages[messageIndex];
-            const currentReaction = message.em;
-            
-            let newReaction = null;
-            
-            if (currentReaction && currentReaction.emoji === emoji && currentReaction.userId === userId) {
-                newReaction = null;
+            let reactions = message.em || {};
+
+            if (remove) {
+                if (reactions[emoji]) {
+                    reactions[emoji] = reactions[emoji].filter(user => user !== userName);
+                    if (reactions[emoji].length === 0) {
+                        delete reactions[emoji];
+                    }
+                }
             } else {
-                newReaction = {
-                    emoji: emoji,
-                    userId: userId,
-                    userEmail: userEmail,
-                    timestamp: Date.now()
-                };
+                for (const [existingEmoji, users] of Object.entries(reactions)) {
+                    const userIndex = users.indexOf(userName);
+                    if (userIndex > -1) {
+                        users.splice(userIndex, 1);
+                        if (users.length === 0) {
+                            delete reactions[existingEmoji];
+                        }
+                    }
+                }
+
+                if (!reactions[emoji]) {
+                    reactions[emoji] = [];
+                }
+                if (!reactions[emoji].includes(userName)) {
+                    reactions[emoji].push(userName);
+                }
+
+                if (Object.keys(reactions).length > 2) {
+                    const reactionKeys = Object.keys(reactions);
+                    const oldestReaction = reactionKeys[0];
+                    delete reactions[oldestReaction];
+                }
             }
-            
-            if (newReaction) {
-                messages[messageIndex].em = newReaction;
-            } else {
+
+            if (Object.keys(reactions).length === 0) {
                 delete messages[messageIndex].em;
+            } else {
+                messages[messageIndex].em = reactions;
             }
 
             await chunkRef.update({
@@ -82,9 +99,9 @@ class MessageBatchService {
                 updatedAt: new Date().toISOString()
             });
 
-            return newReaction;
+            return reactions;
         } catch (error) {
-            console.error('Error adding reaction to message:', error);
+            console.error('Error updating reaction:', error);
             throw error;
         }
     }
@@ -316,7 +333,7 @@ class MessageBatchService {
             fileType: msg.ft || msg.fileType,
             fileUrl: msg.fu || msg.fileUrl,
             replyTo: msg.r || msg.replyTo,
-            em: msg.em || msg.e
+            em: msg.em
         }));
     }
 }

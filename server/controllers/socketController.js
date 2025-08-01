@@ -49,15 +49,13 @@ class SocketController {
             });
 
             socket.on('message-reaction', async (data) => {
-                const { roomId, messageId, reaction, userId, userEmail, timestamp } = data;
+                const { roomId, messageId, reactions, userName } = data;
                 try {
                     socket.to(roomId).emit('reaction-updated', {
                         roomId,
                         messageId,
-                        reaction: reaction,
-                        userId,
-                        userEmail,
-                        timestamp: timestamp || Date.now()
+                        reactions: reactions,
+                        userName
                     });
                 } catch (error) {
                     console.error('Error broadcasting reaction:', error);

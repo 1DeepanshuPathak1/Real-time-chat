@@ -110,22 +110,22 @@ class MessageController {
     }
 
     async addReaction(req, res) {
-        const { roomId, messageId, emoji, userId, userEmail } = req.body;
+        const { roomId, messageId, emoji, userName, remove } = req.body;
 
         try {
-            if (!roomId || !messageId || !emoji || !userId) {
+            if (!roomId || !messageId || !emoji || !userName) {
                 return res.status(400).json({ error: 'Missing required fields' });
             }
 
-            await this.batchService.addReactionToMessage(roomId, messageId, emoji, userId, userEmail);
+            await this.batchService.addReactionToMessage(roomId, messageId, emoji, userName, remove);
 
             res.status(200).json({
                 success: true,
-                message: 'Reaction added successfully'
+                message: 'Reaction updated successfully'
             });
         } catch (error) {
-            console.error('Error adding reaction:', error);
-            res.status(500).json({ error: 'Failed to add reaction' });
+            console.error('Error updating reaction:', error);
+            res.status(500).json({ error: 'Failed to update reaction' });
         }
     }
 
