@@ -6,6 +6,7 @@ import { MessageInfoModal } from './MessageInfoModal';
 import { ReplyMessageDisplay } from './ReplyMessage';
 import { getFirestore, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { useSocket } from '../../services/SocketService';
+import chunkedMessageService from '../../services/chunkedMessageService';
 import './css/MessageReactions.css';
 
 const db = getFirestore();
@@ -38,26 +39,20 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
   }, [user, selectedContact]);
 
   useEffect(() => {
-    const fetchMessageReactions = async () => {
-      if (!selectedContact || !messages.length) return;
+    const fetchMessageReactions = () => {
+      if (!messages.length) return;
       
-      try {
-        const reactions = {};
-        for (const message of messages) {
-          const messageRef = doc(db, 'rooms', selectedContact.roomID, 'messages', message.id);
-          const messageDoc = await getDoc(messageRef);
-          if (messageDoc.exists() && messageDoc.data().reactions) {
-            reactions[message.id] = messageDoc.data().reactions;
-          }
+      const reactions = {};
+      messages.forEach(message => {
+        if (message.em || message.e) {
+          reactions[message.id] = message.em || message.e;
         }
-        setMessageReactions(reactions);
-      } catch (error) {
-        console.error('Error fetching message reactions:', error);
-      }
+      });
+      setMessageReactions(reactions);
     };
 
     fetchMessageReactions();
-  }, [selectedContact, messages]);
+  }, [messages]);
 
   useEffect(() => {
     if (messages.length > 0 && selectedContact && !hasScrolledToUnread.current) {
@@ -267,59 +262,53 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
     if (!message || !emoji || !selectedContact || !user) return;
 
     try {
-      const roomRef = doc(db, 'rooms', selectedContact.roomID);
-      const messageRef = doc(roomRef, 'messages', message.id);
-      
-      const messageDoc = await getDoc(messageRef);
-      let currentReactions = {};
-      
-      if (messageDoc.exists()) {
-        currentReactions = messageDoc.data().reactions || {};
-      } else {
-        await updateDoc(messageRef, {
-          id: message.id,
-          sender: message.sender,
-          content: message.content,
-          timestamp: message.timestamp,
-          type: message.type || 'text',
-          reactions: {}
-        });
-      }
-
-      const userReactions = currentReactions[user.uid] || [];
-      const existingReactionIndex = userReactions.findIndex(r => r.emoji === emoji);
-      
-      if (existingReactionIndex !== -1) {
-        userReactions.splice(existingReactionIndex, 1);
-      } else {
-        userReactions.push({ emoji, timestamp: Date.now() });
-      }
-      
-      const updatedReactions = {
-        ...currentReactions,
-        [user.uid]: userReactions.length > 0 ? userReactions : undefined
+      const messageData = {
+        messageId: message.id,
+        emoji: emoji,
+        userId: user.uid,
+        userEmail: user.email,
+        timestamp: Date.now()
       };
 
-      Object.keys(updatedReactions).forEach(key => {
-        if (updatedReactions[key] === undefined) {
-          delete updatedReactions[key];
+      await chunkedMessageService.addReactionToMessage(selectedContact.roomID, messageData);
+
+      setMessageReactions(prev => {
+        const currentReactions = prev[message.id] || {};
+        const userReactions = currentReactions[user.uid] || [];
+        const existingReactionIndex = userReactions.findIndex(r => r.emoji === emoji);
+        
+        let updatedUserReactions;
+        if (existingReactionIndex !== -1) {
+          updatedUserReactions = userReactions.filter((_, index) => index !== existingReactionIndex);
+        } else {
+          updatedUserReactions = [...userReactions, { emoji, timestamp: Date.now() }];
         }
+        
+        const updatedReactions = {
+          ...currentReactions,
+          [user.uid]: updatedUserReactions.length > 0 ? updatedUserReactions : undefined
+        };
+
+        Object.keys(updatedReactions).forEach(key => {
+          if (updatedReactions[key] === undefined) {
+            delete updatedReactions[key];
+          }
+        });
+
+        return {
+          ...prev,
+          [message.id]: updatedReactions
+        };
       });
-      
-      await updateDoc(messageRef, { reactions: updatedReactions });
-      
-      setMessageReactions(prev => ({
-        ...prev,
-        [message.id]: updatedReactions
-      }));
 
       if (socket) {
         socket.emit('message-reaction', {
           roomId: selectedContact.roomID,
           messageId: message.id,
-          reactions: updatedReactions,
+          emoji: emoji,
           userId: user.uid,
-          userEmail: user.email
+          userEmail: user.email,
+          timestamp: Date.now()
         });
       }
 

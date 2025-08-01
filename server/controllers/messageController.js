@@ -109,6 +109,26 @@ class MessageController {
         }
     }
 
+    async addReaction(req, res) {
+        const { roomId, messageId, emoji, userId, userEmail } = req.body;
+
+        try {
+            if (!roomId || !messageId || !emoji || !userId) {
+                return res.status(400).json({ error: 'Missing required fields' });
+            }
+
+            await this.batchService.addReactionToMessage(roomId, messageId, emoji, userId, userEmail);
+
+            res.status(200).json({
+                success: true,
+                message: 'Reaction added successfully'
+            });
+        } catch (error) {
+            console.error('Error adding reaction:', error);
+            res.status(500).json({ error: 'Failed to add reaction' });
+        }
+    }
+
     async getUnreadCount(req, res) {
         const { roomId } = req.params;
         const { lastRead } = req.query;

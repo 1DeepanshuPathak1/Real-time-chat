@@ -33,6 +33,85 @@ class MessageBatchService {
         return messageId;
     }
 
+    async addReactionToMessage(roomId, messageId, emoji, userId, userEmail) {
+        const redis = await connectRedis();
+        
+        try {
+            const chunkRef = await this.findMessageChunk(roomId, messageId);
+            if (!chunkRef) {
+                throw new Error(`Message ${messageId} not found in any chunk`);
+            }
+
+            const chunkDoc = await chunkRef.get();
+            if (!chunkDoc.exists) {
+                throw new Error(`Chunk does not exist`);
+            }
+
+            const chunkData = chunkDoc.data();
+            const messages = chunkData.messages || [];
+            
+            const messageIndex = messages.findIndex(msg => (msg.i || msg.id) === messageId);
+            if (messageIndex === -1) {
+                throw new Error(`Message ${messageId} not found in chunk`);
+            }
+
+            const message = messages[messageIndex];
+            const currentEmojis = message.em || {};
+            const userReactions = currentEmojis[userId] || [];
+            
+            const existingReactionIndex = userReactions.findIndex(r => r.emoji === emoji);
+            
+            if (existingReactionIndex !== -1) {
+                userReactions.splice(existingReactionIndex, 1);
+            } else {
+                userReactions.push({ emoji, timestamp: Date.now() });
+            }
+            
+            if (userReactions.length > 0) {
+                currentEmojis[userId] = userReactions;
+            } else {
+                delete currentEmojis[userId];
+            }
+            
+            messages[messageIndex].em = Object.keys(currentEmojis).length > 0 ? currentEmojis : undefined;
+            if (!messages[messageIndex].em) {
+                delete messages[messageIndex].em;
+            }
+
+            await chunkRef.update({
+                messages: messages,
+                updatedAt: new Date().toISOString()
+            });
+
+            return currentEmojis;
+        } catch (error) {
+            console.error('Error adding reaction to message:', error);
+            throw error;
+        }
+    }
+
+    async findMessageChunk(roomId, messageId) {
+        try {
+            const chunksRef = this.db.collection('rooms').doc(roomId).collection('messageChunks');
+            const chunksSnapshot = await chunksRef.get();
+            
+            for (const chunkDoc of chunksSnapshot.docs) {
+                const chunkData = chunkDoc.data();
+                const messages = chunkData.messages || [];
+                
+                const messageExists = messages.some(msg => (msg.i || msg.id) === messageId);
+                if (messageExists) {
+                    return chunkDoc.ref;
+                }
+            }
+            
+            return null;
+        } catch (error) {
+            console.error('Error finding message chunk:', error);
+            throw error;
+        }
+    }
+
     async getCurrentChunkId(roomId) {
         const redis = await connectRedis();
         const currentChunk = await redis.get(`current_chunk:${roomId}`);
@@ -237,7 +316,8 @@ class MessageBatchService {
             fileSize: msg.fs || msg.fileSize,
             fileType: msg.ft || msg.fileType,
             fileUrl: msg.fu || msg.fileUrl,
-            replyTo: msg.r || msg.replyTo
+            replyTo: msg.r || msg.replyTo,
+            em: msg.em || msg.e
         }));
     }
 }

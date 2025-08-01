@@ -24,7 +24,6 @@ class ChunkedMessageService {
             }
 
             const data = await response.json();
-
             const formattedMessages = this.formatMessages(data.messages);
 
             this.cache.set(`${roomId}_latest`, {
@@ -144,6 +143,30 @@ class ChunkedMessageService {
         return await this.getPendingMessages(roomId);
     }
 
+    async addReactionToMessage(roomId, reactionData) {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/messages/react`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    roomId,
+                    ...reactionData
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error adding reaction to message:', error);
+            throw error;
+        }
+    }
+
     formatMessages(messages) {
         return messages.map(msg => {
             const timestamp = msg.t || msg.timestamp || msg.time || Date.now();
@@ -158,7 +181,8 @@ class ChunkedMessageService {
                 fileSize: msg.fs || msg.fileSize,
                 fileType: msg.ft || msg.fileType,
                 fileUrl: msg.fu || msg.fileUrl,
-                replyTo: msg.r || msg.replyTo
+                replyTo: msg.r || msg.replyTo,
+                em: msg.em || msg.e
             };
         });
     }

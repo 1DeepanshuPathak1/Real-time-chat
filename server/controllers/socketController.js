@@ -49,15 +49,17 @@ class SocketController {
             });
 
             socket.on('message-reaction', async (data) => {
-                const { roomId, messageId, reactions, userId, userEmail } = data;
+                const { roomId, messageId, emoji, userId, userEmail, timestamp } = data;
                 try {
+                    const updatedReactions = await this.batchService.addReactionToMessage(roomId, messageId, emoji, userId, userEmail);
+                    
                     socket.to(roomId).emit('reaction-updated', {
                         roomId,
                         messageId,
-                        reactions,
+                        reactions: updatedReactions,
                         userId,
                         userEmail,
-                        timestamp: Date.now()
+                        timestamp: timestamp || Date.now()
                     });
                 } catch (error) {
                     console.error('Error broadcasting reaction:', error);

@@ -19,6 +19,7 @@ module.exports = (healthController, roomController, friendRequestController, aut
     router.get('/api/messages/pending/:roomId', messageController.getPendingMessages.bind(messageController));
     router.get('/api/messages/unread-count/:roomId', messageController.getUnreadCount.bind(messageController));
     router.post('/api/messages/mark-read', messageController.markMessagesRead.bind(messageController));
+    router.post('/api/messages/react', messageController.addReaction.bind(messageController));
 
     return router;
 };
