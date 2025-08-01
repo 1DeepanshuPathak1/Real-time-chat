@@ -157,7 +157,8 @@ class ChunkedMessageService {
                 fileName: msg.fn || msg.fileName,
                 fileSize: msg.fs || msg.fileSize,
                 fileType: msg.ft || msg.fileType,
-                fileUrl: msg.fu || msg.fileUrl
+                fileUrl: msg.fu || msg.fileUrl,
+                replyTo: msg.r || msg.replyTo
             };
         });
     }

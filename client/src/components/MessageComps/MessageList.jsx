@@ -6,6 +6,7 @@ import { MessageInfoModal } from './MessageInfoModal';
 import { ReplyMessageDisplay } from './ReplyMessage';
 import { getFirestore, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { useSocket } from '../../services/SocketService';
+import './css/MessageReactions.css';
 
 const db = getFirestore();
 
@@ -17,6 +18,7 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
   const [showMessageInfo, setShowMessageInfo] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [copiedMessageId, setCopiedMessageId] = useState(null);
+  const [messageReactions, setMessageReactions] = useState({});
 
   useEffect(() => {
     const fetchLastReadMessageId = async () => {
@@ -34,6 +36,28 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
 
     fetchLastReadMessageId();
   }, [user, selectedContact]);
+
+  useEffect(() => {
+    const fetchMessageReactions = async () => {
+      if (!selectedContact || !messages.length) return;
+      
+      try {
+        const reactions = {};
+        for (const message of messages) {
+          const messageRef = doc(db, 'rooms', selectedContact.roomID, 'messages', message.id);
+          const messageDoc = await getDoc(messageRef);
+          if (messageDoc.exists() && messageDoc.data().reactions) {
+            reactions[message.id] = messageDoc.data().reactions;
+          }
+        }
+        setMessageReactions(reactions);
+      } catch (error) {
+        console.error('Error fetching message reactions:', error);
+      }
+    };
+
+    fetchMessageReactions();
+  }, [selectedContact, messages]);
 
   useEffect(() => {
     if (messages.length > 0 && selectedContact && !hasScrolledToUnread.current) {
@@ -128,6 +152,22 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
     }
   }, [contextMenu.show, showMessageInfo]);
 
+  useEffect(() => {
+    if (socket) {
+      const handleReactionUpdate = (data) => {
+        if (data.roomId === selectedContact?.roomID) {
+          setMessageReactions(prev => ({
+            ...prev,
+            [data.messageId]: data.reactions
+          }));
+        }
+      };
+
+      socket.on('reaction-updated', handleReactionUpdate);
+      return () => socket.off('reaction-updated', handleReactionUpdate);
+    }
+  }, [socket, selectedContact]);
+
   const handleContextMenu = (e, message) => {
     e.preventDefault();
     e.stopPropagation();
@@ -163,6 +203,12 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
   const handleReply = (message) => {
     if (onReply && message) {
       onReply(message);
+      setTimeout(() => {
+        const messageInput = document.querySelector('.message-input');
+        if (messageInput) {
+          messageInput.focus();
+        }
+      }, 100);
     }
   };
 
@@ -221,47 +267,60 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
     if (!message || !emoji || !selectedContact || !user) return;
 
     try {
-      const reactionData = {
-        messageId: message.id,
-        emoji: emoji,
-        userId: user.uid,
-        userEmail: user.email,
-        timestamp: Date.now()
+      const roomRef = doc(db, 'rooms', selectedContact.roomID);
+      const messageRef = doc(roomRef, 'messages', message.id);
+      
+      const messageDoc = await getDoc(messageRef);
+      let currentReactions = {};
+      
+      if (messageDoc.exists()) {
+        currentReactions = messageDoc.data().reactions || {};
+      } else {
+        await updateDoc(messageRef, {
+          id: message.id,
+          sender: message.sender,
+          content: message.content,
+          timestamp: message.timestamp,
+          type: message.type || 'text',
+          reactions: {}
+        });
+      }
+
+      const userReactions = currentReactions[user.uid] || [];
+      const existingReactionIndex = userReactions.findIndex(r => r.emoji === emoji);
+      
+      if (existingReactionIndex !== -1) {
+        userReactions.splice(existingReactionIndex, 1);
+      } else {
+        userReactions.push({ emoji, timestamp: Date.now() });
+      }
+      
+      const updatedReactions = {
+        ...currentReactions,
+        [user.uid]: userReactions.length > 0 ? userReactions : undefined
       };
+
+      Object.keys(updatedReactions).forEach(key => {
+        if (updatedReactions[key] === undefined) {
+          delete updatedReactions[key];
+        }
+      });
+      
+      await updateDoc(messageRef, { reactions: updatedReactions });
+      
+      setMessageReactions(prev => ({
+        ...prev,
+        [message.id]: updatedReactions
+      }));
 
       if (socket) {
         socket.emit('message-reaction', {
           roomId: selectedContact.roomID,
-          ...reactionData
+          messageId: message.id,
+          reactions: updatedReactions,
+          userId: user.uid,
+          userEmail: user.email
         });
-      }
-
-      const roomRef = doc(db, 'rooms', selectedContact.roomID);
-      const messageRef = doc(roomRef, 'messages', message.id);
-      
-      try {
-        const messageDoc = await getDoc(messageRef);
-        if (messageDoc.exists()) {
-          const currentReactions = messageDoc.data().reactions || {};
-          const userReactions = currentReactions[user.uid] || [];
-          
-          const existingReactionIndex = userReactions.findIndex(r => r.emoji === emoji);
-          
-          if (existingReactionIndex !== -1) {
-            userReactions.splice(existingReactionIndex, 1);
-          } else {
-            userReactions.push({ emoji, timestamp: Date.now() });
-          }
-          
-          const updatedReactions = {
-            ...currentReactions,
-            [user.uid]: userReactions
-          };
-          
-          await updateDoc(messageRef, { reactions: updatedReactions });
-        }
-      } catch (dbError) {
-        console.error('Error updating reaction in database:', dbError);
       }
 
     } catch (error) {
@@ -284,6 +343,44 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
   const getUnreadCount = () => {
     if (firstUnreadIndex === -1) return 0;
     return messages.slice(firstUnreadIndex).filter(msg => msg.sender !== currentUserEmail).length;
+  };
+
+  const findReplyToMessage = (replyToId) => {
+    return messages.find(msg => msg.id === replyToId);
+  };
+
+  const renderReactions = (message) => {
+    const reactions = messageReactions[message.id] || {};
+    const reactionCounts = {};
+    
+    Object.values(reactions).forEach(userReactions => {
+      if (Array.isArray(userReactions)) {
+        userReactions.forEach(reaction => {
+          if (reactionCounts[reaction.emoji]) {
+            reactionCounts[reaction.emoji]++;
+          } else {
+            reactionCounts[reaction.emoji] = 1;
+          }
+        });
+      }
+    });
+
+    if (Object.keys(reactionCounts).length === 0) return null;
+
+    return (
+      <div className="message-reactions">
+        {Object.entries(reactionCounts).map(([emoji, count]) => (
+          <div 
+            key={emoji} 
+            className="reaction-bubble"
+            onClick={() => handleEmojiReact(message, emoji)}
+          >
+            <span className="reaction-emoji">{emoji}</span>
+            {count > 1 && <span className="reaction-count">{count}</span>}
+          </div>
+        ))}
+      </div>
+    );
   };
 
   const renderMessageContent = (message) => {
@@ -341,13 +438,19 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
           )}
           <div
             className={`message ${message.sender === currentUserEmail ? 'sent' : 'received'}`}
-            onContextMenu={(e) => handleContextMenu(e, message)}
             data-message-id={message.id}
           >
-            <div className={`message-content ${message.type === 'image' ? 'image-message' : ''} ${copiedMessageId === message.id ? 'copied-flash' : ''}`}>
+            <div 
+              className={`message-content ${message.type === 'image' ? 'image-message' : ''} ${copiedMessageId === message.id ? 'copied-flash' : ''}`}
+              onContextMenu={(e) => handleContextMenu(e, message)}
+            >
               {message.replyTo && (
                 <ReplyMessageDisplay 
-                  replyTo={message.replyTo} 
+                  replyTo={findReplyToMessage(message.replyTo) || { 
+                    id: message.replyTo, 
+                    content: 'Message not found', 
+                    sender: 'Unknown' 
+                  }} 
                   currentUserEmail={currentUserEmail}
                 />
               )}
@@ -363,6 +466,7 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
                   selectedContact={selectedContact}
                 />
               </div>
+              {renderReactions(message)}
             </div>
           </div>
         </div>

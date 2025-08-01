@@ -16,7 +16,7 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
         sender: user.email,
         content: messageContent,
         type: 'text',
-        ...(replyTo && { replyTo })
+        ...(replyTo && { replyTo: replyTo.id })
       };
 
       const messageId = await chunkedMessageService.sendMessage(selectedContact.roomID, messageData);
@@ -28,7 +28,7 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         timestamp: Date.now(),
         type: 'text',
-        ...(replyTo && { replyTo })
+        ...(replyTo && { replyTo: replyTo.id })
       };
 
       setMessages(prevMessages => [...prevMessages, newMessage]);
@@ -40,7 +40,8 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
           sender: user.email,
           messageId: messageId,
           timestamp: newMessage.timestamp,
-          ...(replyTo && { replyTo })
+          type: 'text',
+          ...(replyTo && { replyTo: replyTo.id })
         });
       }
 

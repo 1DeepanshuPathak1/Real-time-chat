@@ -15,7 +15,9 @@ export const MessageContextMenu = ({
   isDark 
 }) => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [emojiPickerPosition, setEmojiPickerPosition] = useState({ x: 0, y: 0 });
   const menuRef = useRef(null);
+  const emojiButtonRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -67,6 +69,36 @@ export const MessageContextMenu = ({
 
   const toggleEmojiPicker = (e) => {
     e.stopPropagation();
+    
+    if (!showEmojiPicker && emojiButtonRef.current) {
+      const buttonRect = emojiButtonRef.current.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const pickerWidth = 320;
+      const pickerHeight = 400;
+      
+      let pickerX = buttonRect.right + 10;
+      let pickerY = buttonRect.top;
+      
+      if (pickerX + pickerWidth > viewportWidth) {
+        pickerX = buttonRect.left - pickerWidth - 10;
+      }
+      
+      if (pickerY + pickerHeight > viewportHeight) {
+        pickerY = viewportHeight - pickerHeight - 10;
+      }
+      
+      if (pickerX < 10) {
+        pickerX = 10;
+      }
+      
+      if (pickerY < 10) {
+        pickerY = 10;
+      }
+      
+      setEmojiPickerPosition({ x: pickerX, y: pickerY });
+    }
+    
     setShowEmojiPicker(!showEmojiPicker);
   };
 
@@ -85,7 +117,11 @@ export const MessageContextMenu = ({
           <span>Reply</span>
         </button>
         
-        <button className="context-menu-item" onClick={toggleEmojiPicker}>
+        <button 
+          ref={emojiButtonRef}
+          className="context-menu-item" 
+          onClick={toggleEmojiPicker}
+        >
           <FiSmile className="context-menu-icon" />
           <span>React</span>
         </button>
@@ -102,7 +138,16 @@ export const MessageContextMenu = ({
       </div>
       
       {showEmojiPicker && (
-        <div className="context-emoji-picker" onClick={(e) => e.stopPropagation()}>
+        <div 
+          className="context-emoji-picker" 
+          style={{
+            position: 'fixed',
+            left: emojiPickerPosition.x,
+            top: emojiPickerPosition.y,
+            zIndex: 1002
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
           <EmojiPickerComponent
             theme={isDark ? 'dark' : 'light'}
             show={true}

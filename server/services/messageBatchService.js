@@ -3,240 +3,239 @@ const { connectRedis } = require('../config/redisConfig');
 class MessageBatchService {
     constructor(db) {
         this.db = db;
-        this.pendingMessages = new Map();
-        this.batchWriteInterval = 5000;
-        this.maxBatchSize = 50;
-        this.startBatchProcessor();
+        this.batchSize = 50;
+        this.batchTimeout = 5000;
+        this.pendingBatches = new Map();
+        this.flushInterval = setInterval(() => this.flushAllBatches(), this.batchTimeout);
     }
 
     async addMessageToBatch(roomId, messageData) {
-        const redis = await connectRedis();
         const messageId = `${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-
-        const messageWithId = {
+        const timestamp = Date.now();
+        
+        const compressedMessage = {
             i: messageId,
             s: messageData.sender,
             c: messageData.content,
-            t: Date.now(),
+            t: timestamp,
             ty: messageData.type || 'text',
             ...(messageData.fileName && { fn: messageData.fileName }),
             ...(messageData.fileSize && { fs: messageData.fileSize }),
             ...(messageData.fileType && { ft: messageData.fileType }),
-            ...(messageData.fileUrl && { fu: messageData.fileUrl })
+            ...(messageData.fileUrl && { fu: messageData.fileUrl }),
+            ...(messageData.replyTo && { r: messageData.replyTo })
         };
 
-        const key = `pending_messages:${roomId}`;
-        await redis.lPush(key, JSON.stringify(messageWithId));
-        await redis.expire(key, 300);
+        try {
+            const redis = await connectRedis();
+            await redis.lPush(`room:${roomId}:pending`, JSON.stringify(compressedMessage));
+            await redis.expire(`room:${roomId}:pending`, 3600);
+
+            if (!this.pendingBatches.has(roomId)) {
+                this.pendingBatches.set(roomId, {
+                    messages: [],
+                    lastUpdate: Date.now()
+                });
+            }
+
+            const batch = this.pendingBatches.get(roomId);
+            batch.messages.push(compressedMessage);
+            batch.lastUpdate = Date.now();
+
+            if (batch.messages.length >= this.batchSize) {
+                await this.flushBatch(roomId);
+            }
+
+            await this.updateRoomLastMessage(roomId, messageData.sender, messageData.content, timestamp);
+
+        } catch (error) {
+            console.error('Error adding message to batch:', error);
+        }
 
         return messageId;
     }
 
-    async getCurrentChunkId(roomId) {
-        const redis = await connectRedis();
-        const currentChunk = await redis.get(`current_chunk:${roomId}`);
-        return currentChunk || 'chunk_1';
-    }
-
-    async incrementChunkIfNeeded(roomId, currentChunkId) {
-        const redis = await connectRedis();
-        const chunkSize = await redis.get(`chunk_size:${roomId}:${currentChunkId}`) || 0;
-
-        if (parseInt(chunkSize) >= this.maxBatchSize) {
-            const chunkNumber = parseInt(currentChunkId.split('_')[1]) + 1;
-            const newChunkId = `chunk_${chunkNumber}`;
-            await redis.set(`current_chunk:${roomId}`, newChunkId);
-            await redis.set(`chunk_size:${roomId}:${newChunkId}`, 0);
-            return newChunkId;
-        }
-
-        return currentChunkId;
-    }
-
-    startBatchProcessor() {
-        setInterval(async () => {
-            await this.processBatchWrites();
-        }, this.batchWriteInterval);
-    }
-
-    async processBatchWrites() {
-        const redis = await connectRedis();
-        const keys = await redis.keys('pending_messages:*');
-
-        for (const key of keys) {
-            const roomId = key.split(':')[1];
-            await this.processBatchForRoom(roomId);
-        }
-    }
-
-    async processBatchForRoom(roomId) {
-        const redis = await connectRedis();
-        const key = `pending_messages:${roomId}`;
-
-        const pendingMessages = [];
-        let message;
-
-        while ((message = await redis.rPop(key))) {
-            pendingMessages.push(JSON.parse(message));
-            if (pendingMessages.length >= this.maxBatchSize) break;
-        }
-
-        if (pendingMessages.length === 0) return;
-
-        const currentChunkId = await this.getCurrentChunkId(roomId);
-        const newChunkId = await this.incrementChunkIfNeeded(roomId, currentChunkId);
+    async flushBatch(roomId) {
+        const batch = this.pendingBatches.get(roomId);
+        if (!batch || batch.messages.length === 0) return;
 
         try {
-            const batch = this.db.batch();
-            const chunkRef = this.db.collection('rooms').doc(roomId).collection('messageChunks').doc(newChunkId);
+            const chunkId = `${roomId}_${Date.now()}`;
+            const chunkRef = this.db.collection('messageChunks').doc(chunkId);
 
-            const existingChunk = await chunkRef.get();
-            const existingMessages = existingChunk.exists ? existingChunk.data().messages || [] : [];
+            await chunkRef.set({
+                roomId,
+                messages: batch.messages,
+                createdAt: new Date().toISOString(),
+                messageCount: batch.messages.length
+            });
 
-            const allMessages = [...existingMessages, ...pendingMessages];
+            const roomChunksRef = this.db.collection('rooms').doc(roomId).collection('chunks');
+            await roomChunksRef.doc(chunkId).set({
+                chunkId,
+                createdAt: new Date().toISOString(),
+                messageCount: batch.messages.length
+            });
 
-            if (allMessages.length > this.maxBatchSize) {
-                const splitPoint = this.maxBatchSize - existingMessages.length;
-                const currentChunkMessages = [...existingMessages, ...pendingMessages.slice(0, splitPoint)];
-                const nextChunkMessages = pendingMessages.slice(splitPoint);
+            const redis = await connectRedis();
+            await redis.del(`room:${roomId}:pending`);
 
-                batch.set(chunkRef, {
-                    messages: currentChunkMessages,
-                    createdAt: existingChunk.exists ? existingChunk.data().createdAt : new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    messageCount: currentChunkMessages.length
-                });
+            this.pendingBatches.delete(roomId);
 
-                if (nextChunkMessages.length > 0) {
-                    const nextChunkNumber = parseInt(newChunkId.split('_')[1]) + 1;
-                    const nextChunkId = `chunk_${nextChunkNumber}`;
-                    const nextChunkRef = this.db.collection('rooms').doc(roomId).collection('messageChunks').doc(nextChunkId);
-
-                    batch.set(nextChunkRef, {
-                        messages: nextChunkMessages,
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString(),
-                        messageCount: nextChunkMessages.length
-                    });
-
-                    await redis.set(`current_chunk:${roomId}`, nextChunkId);
-                    await redis.set(`chunk_size:${roomId}:${nextChunkId}`, nextChunkMessages.length);
-                }
-
-                await redis.set(`chunk_size:${roomId}:${newChunkId}`, currentChunkMessages.length);
-            } else {
-                batch.set(chunkRef, {
-                    messages: allMessages,
-                    createdAt: existingChunk.exists ? existingChunk.data().createdAt : new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    messageCount: allMessages.length
-                });
-
-                await redis.set(`chunk_size:${roomId}:${newChunkId}`, allMessages.length);
-            }
-
-            await batch.commit();
-
-            await this.updateRoomMetadata(roomId, pendingMessages[pendingMessages.length - 1]);
-
+            console.log(`Flushed ${batch.messages.length} messages for room ${roomId}`);
         } catch (error) {
-            console.error('Batch write error:', error);
-            for (const msg of pendingMessages) {
-                await redis.lPush(key, JSON.stringify(msg));
-            }
+            console.error('Error flushing batch:', error);
         }
     }
 
-    async updateRoomMetadata(roomId, lastMessage) {
-        const roomRef = this.db.collection('rooms').doc(roomId);
-        await roomRef.update({
-            lastMessage: {
-                content: lastMessage.c,
-                sender: lastMessage.s,
-                time: new Date(lastMessage.t).toISOString(),
-                type: lastMessage.ty
-            },
-            lastMessageTime: new Date(lastMessage.t).toISOString(),
-            lastMessageTimestamp: lastMessage.t,
-            lastMessageId: lastMessage.i,
-            updatedAt: new Date().toISOString()
-        });
-    }
+    async flushAllBatches() {
+        const roomIds = Array.from(this.pendingBatches.keys());
+        const currentTime = Date.now();
 
-    async markMessagesAsRead(roomId, userId, lastReadMessageId) {
-        const roomRef = this.db.collection('rooms').doc(roomId);
-        await roomRef.update({
-            [`lastReadMessageId_${userId}`]: lastReadMessageId,
-            [`lastReadTimestamp_${userId}`]: Date.now()
-        });
+        for (const roomId of roomIds) {
+            const batch = this.pendingBatches.get(roomId);
+            if (batch && (currentTime - batch.lastUpdate) >= this.batchTimeout) {
+                await this.flushBatch(roomId);
+            }
+        }
     }
 
     async getLatestChunk(roomId) {
-        const currentChunkId = await this.getCurrentChunkId(roomId);
-        const chunkRef = this.db.collection('rooms').doc(roomId).collection('messageChunks').doc(currentChunkId);
-        const chunkDoc = await chunkRef.get();
+        try {
+            const chunksRef = this.db.collection('rooms').doc(roomId).collection('chunks');
+            const chunksSnapshot = await chunksRef.orderBy('createdAt', 'desc').limit(1).get();
 
-        if (chunkDoc.exists) {
+            if (chunksSnapshot.empty) {
+                return { id: null, messages: [], hasMore: false };
+            }
+
+            const latestChunkDoc = chunksSnapshot.docs[0];
+            const chunkData = latestChunkDoc.data();
+            
+            const chunkRef = this.db.collection('messageChunks').doc(chunkData.chunkId);
+            const chunkDoc = await chunkRef.get();
+
+            if (!chunkDoc.exists) {
+                return { id: null, messages: [], hasMore: false };
+            }
+
+            const messages = chunkDoc.data().messages || [];
+            const hasMore = chunksSnapshot.docs.length > 0;
+
             return {
-                id: currentChunkId,
-                messages: this.formatMessages(chunkDoc.data().messages || []),
-                hasMore: await this.hasOlderChunks(roomId, currentChunkId)
+                id: chunkData.chunkId,
+                messages: messages.reverse(),
+                hasMore
             };
+        } catch (error) {
+            console.error('Error getting latest chunk:', error);
+            return { id: null, messages: [], hasMore: false };
         }
-
-        return { id: currentChunkId, messages: [], hasMore: false };
-    }
-
-    async getChunk(roomId, chunkId) {
-        const chunkRef = this.db.collection('rooms').doc(roomId).collection('messageChunks').doc(chunkId);
-        const chunkDoc = await chunkRef.get();
-
-        if (chunkDoc.exists) {
-            return {
-                id: chunkId,
-                messages: this.formatMessages(chunkDoc.data().messages || []),
-                hasMore: await this.hasOlderChunks(roomId, chunkId)
-            };
-        }
-
-        return null;
     }
 
     async getOlderChunk(roomId, currentChunkId) {
-        const currentChunkNumber = parseInt(currentChunkId.split('_')[1]);
-        const olderChunkNumber = currentChunkNumber - 1;
+        try {
+            const currentChunkRef = this.db.collection('rooms').doc(roomId).collection('chunks').doc(currentChunkId);
+            const currentChunkDoc = await currentChunkRef.get();
 
-        if (olderChunkNumber < 1) return null;
+            if (!currentChunkDoc.exists) {
+                return null;
+            }
 
-        const olderChunkId = `chunk_${olderChunkNumber}`;
-        return await this.getChunk(roomId, olderChunkId);
-    }
+            const currentChunkData = currentChunkDoc.data();
+            const chunksRef = this.db.collection('rooms').doc(roomId).collection('chunks');
+            
+            const olderChunksSnapshot = await chunksRef
+                .where('createdAt', '<', currentChunkData.createdAt)
+                .orderBy('createdAt', 'desc')
+                .limit(1)
+                .get();
 
-    async hasOlderChunks(roomId, chunkId) {
-        const chunkNumber = parseInt(chunkId.split('_')[1]);
-        return chunkNumber > 1;
+            if (olderChunksSnapshot.empty) {
+                return { id: null, messages: [], hasMore: false };
+            }
+
+            const olderChunkDoc = olderChunksSnapshot.docs[0];
+            const olderChunkData = olderChunkDoc.data();
+            
+            const chunkRef = this.db.collection('messageChunks').doc(olderChunkData.chunkId);
+            const chunkDoc = await chunkRef.get();
+
+            if (!chunkDoc.exists) {
+                return { id: null, messages: [], hasMore: false };
+            }
+
+            const messages = chunkDoc.data().messages || [];
+            
+            const hasMoreSnapshot = await chunksRef
+                .where('createdAt', '<', olderChunkData.createdAt)
+                .limit(1)
+                .get();
+
+            return {
+                id: olderChunkData.chunkId,
+                messages: messages.reverse(),
+                hasMore: !hasMoreSnapshot.empty
+            };
+        } catch (error) {
+            console.error('Error getting older chunk:', error);
+            return null;
+        }
     }
 
     async getMessagesFromRedis(roomId) {
-        const redis = await connectRedis();
-        const key = `pending_messages:${roomId}`;
-        const messages = await redis.lRange(key, 0, -1);
-        return this.formatMessages(messages.map(msg => JSON.parse(msg))).reverse();
+        try {
+            const redis = await connectRedis();
+            const messages = await redis.lRange(`room:${roomId}:pending`, 0, -1);
+            
+            return messages.map(msg => JSON.parse(msg)).reverse();
+        } catch (error) {
+            console.error('Error getting messages from Redis:', error);
+            return [];
+        }
     }
 
-    formatMessages(messages) {
-        return messages.map(msg => ({
-            id: msg.i || msg.id,
-            sender: msg.s || msg.sender,
-            content: msg.c || msg.content,
-            time: new Date(msg.t || msg.timestamp || msg.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            timestamp: msg.t || msg.timestamp || msg.time,
-            type: msg.ty || msg.type || 'text',
-            fileName: msg.fn || msg.fileName,
-            fileSize: msg.fs || msg.fileSize,
-            fileType: msg.ft || msg.fileType,
-            fileUrl: msg.fu || msg.fileUrl
-        }));
+    async updateRoomLastMessage(roomId, sender, content, timestamp) {
+        try {
+            const roomRef = this.db.collection('rooms').doc(roomId);
+            await roomRef.update({
+                lastMessage: content,
+                lastMessageSender: sender,
+                lastMessageTimestamp: timestamp,
+                lastMessageTime: timestamp
+            });
+        } catch (error) {
+            if (error.code === 'not-found') {
+                const roomRef = this.db.collection('rooms').doc(roomId);
+                await roomRef.set({
+                    lastMessage: content,
+                    lastMessageSender: sender,
+                    lastMessageTimestamp: timestamp,
+                    lastMessageTime: timestamp,
+                    createdAt: new Date().toISOString()
+                });
+            } else {
+                console.error('Error updating room last message:', error);
+            }
+        }
+    }
+
+    async markMessagesAsRead(roomId, userId, lastReadMessageId) {
+        try {
+            const roomRef = this.db.collection('rooms').doc(roomId);
+            await roomRef.update({
+                [`lastReadMessageId_${userId}`]: lastReadMessageId,
+                [`lastReadTimestamp_${userId}`]: Date.now()
+            });
+        } catch (error) {
+            console.error('Error marking messages as read:', error);
+        }
+    }
+
+    cleanup() {
+        if (this.flushInterval) {
+            clearInterval(this.flushInterval);
+        }
     }
 }
 

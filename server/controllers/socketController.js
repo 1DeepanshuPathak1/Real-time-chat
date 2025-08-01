@@ -19,14 +19,16 @@ class SocketController {
             });
 
             socket.on('send-message', async (data) => {
-                const { roomID, message, sender, messageId } = data;
+                const { roomID, message, sender, messageId, type, replyTo } = data;
                 try {
                     this.io.to(roomID).emit('received-message', {
                         roomID,
                         sender,
                         message,
                         messageId,
-                        timestamp: data.timestamp
+                        timestamp: data.timestamp,
+                        type: type || 'text',
+                        ...(replyTo && { replyTo })
                     });
 
                     const roomRef = this.db.collection('rooms').doc(roomID);
@@ -43,6 +45,22 @@ class SocketController {
                     });
                 } catch (error) {
                     console.error('Error broadcasting message:', error);
+                }
+            });
+
+            socket.on('message-reaction', async (data) => {
+                const { roomId, messageId, reactions, userId, userEmail } = data;
+                try {
+                    socket.to(roomId).emit('reaction-updated', {
+                        roomId,
+                        messageId,
+                        reactions,
+                        userId,
+                        userEmail,
+                        timestamp: Date.now()
+                    });
+                } catch (error) {
+                    console.error('Error broadcasting reaction:', error);
                 }
             });
 

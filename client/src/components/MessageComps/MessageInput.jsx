@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { FiSend, FiMic, FiSmile, FiPaperclip, FiImage, FiCamera, FiFile, FiBarChart2 } from 'react-icons/fi';
+import { FiSend, FiMic, FiSmile, FiPaperclip, FiImage, FiCamera, FiFile } from 'react-icons/fi';
 
 export const MessageInput = ({
   onSubmit,
@@ -23,6 +23,20 @@ export const MessageInput = ({
       inputRef.current.focus();
     }
   }, [autoFocus]);
+
+  useEffect(() => {
+    if (inputRef.current) {
+      window.focusMessageInput = () => {
+        inputRef.current.focus();
+      };
+    }
+    
+    return () => {
+      if (window.focusMessageInput) {
+        delete window.focusMessageInput;
+      }
+    };
+  }, []);
 
   return (
     <form onSubmit={onSubmit} className="message-input-container">
