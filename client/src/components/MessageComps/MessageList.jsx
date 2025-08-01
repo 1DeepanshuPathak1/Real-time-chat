@@ -125,7 +125,7 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (contextMenu.show && !event.target.closest('.message-context-menu')) {
+      if (contextMenu.show && !event.target.closest('.message-context-menu') && !event.target.closest('.context-emoji-picker')) {
         handleCloseContextMenu();
       }
     };
@@ -214,103 +214,6 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
     }
   };
 
-  const handleCopy = async (message) => {
-    if (!message || !message.content) return;
-
-    try {
-      let textToCopy = '';
-      
-      if (message.type === 'text') {
-        textToCopy = message.content;
-      } else if (message.type === 'document' || message.type === 'image') {
-        textToCopy = message.fileName || message.content;
-      } else {
-        textToCopy = message.content.toString();
-      }
-
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(textToCopy);
-      } else {
-        const textArea = document.createElement('textarea');
-        textArea.value = textToCopy;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-999999px';
-        textArea.style.top = '-999999px';
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
-        
-        try {
-          document.execCommand('copy');
-        } catch (err) {
-          console.error('Fallback copy failed:', err);
-          throw new Error('Copy failed');
-        } finally {
-          document.body.removeChild(textArea);
-        }
-      }
-
-      setCopiedMessageId(message.id);
-      setTimeout(() => setCopiedMessageId(null), 2000);
-
-    } catch (error) {
-      console.error('Failed to copy message:', error);
-    }
-  };
-
-  const handleEmojiReact = async (message, emoji) => {
-    if (!message || !emoji || !selectedContact || !user) return;
-
-    const currentReaction = messageReactions[message.id];
-    let newReaction = null;
-
-    if (currentReaction && currentReaction.emoji === emoji && currentReaction.userId === user.uid) {
-      newReaction = null;
-    } else {
-      newReaction = {
-        emoji: emoji,
-        userId: user.uid,
-        userEmail: user.email,
-        timestamp: Date.now()
-      };
-    }
-
-    setMessageReactions(prev => ({
-      ...prev,
-      [message.id]: newReaction
-    }));
-
-    try {
-      const messageData = {
-        messageId: message.id,
-        emoji: emoji,
-        userId: user.uid,
-        userEmail: user.email,
-        timestamp: Date.now()
-      };
-
-      await chunkedMessageService.addReactionToMessage(selectedContact.roomID, messageData);
-
-      if (socket) {
-        socket.emit('message-reaction', {
-          roomId: selectedContact.roomID,
-          messageId: message.id,
-          reaction: newReaction,
-          userId: user.uid,
-          userEmail: user.email,
-          timestamp: Date.now()
-        });
-      }
-
-    } catch (error) {
-      console.error('Error handling emoji reaction:', error);
-      setMessageReactions(prev => ({
-        ...prev,
-        [message.id]: currentReaction
-      }));
-    }
-  };
-
   const isMessageRead = (message) => {
     if (message.sender === currentUserEmail) {
       if (!lastReadMessageId.current) return false;
@@ -342,12 +245,53 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
     return (
       <div 
         className={`message-reaction ${isOwn ? 'own-reaction' : 'other-reaction'}`}
-        onClick={() => handleEmojiReact(message, reaction.emoji)}
+        onClick={() => isOwn && handleReactionClick(message, reaction)}
         title={`${isOwn ? 'You' : reaction.userEmail} reacted with ${reaction.emoji}`}
+        style={{ cursor: isOwn ? 'pointer' : 'default' }}
       >
         <span className="reaction-emoji">{reaction.emoji}</span>
       </div>
     );
+  };
+
+  const handleReactionClick = async (message, reaction) => {
+    if (!message || !reaction || !selectedContact || !user) return;
+    if (reaction.userId !== user.uid) return;
+
+    setMessageReactions(prev => ({
+      ...prev,
+      [message.id]: null
+    }));
+
+    try {
+      const messageData = {
+        messageId: message.id,
+        emoji: reaction.emoji,
+        userId: user.uid,
+        userEmail: user.email,
+        timestamp: Date.now()
+      };
+
+      await chunkedMessageService.addReactionToMessage(selectedContact.roomID, messageData);
+
+      if (socket) {
+        socket.emit('message-reaction', {
+          roomId: selectedContact.roomID,
+          messageId: message.id,
+          reaction: null,
+          userId: user.uid,
+          userEmail: user.email,
+          timestamp: Date.now()
+        });
+      }
+
+    } catch (error) {
+      console.error('Error removing emoji reaction:', error);
+      setMessageReactions(prev => ({
+        ...prev,
+        [message.id]: reaction
+      }));
+    }
   };
 
   const renderMessageContent = (message) => {
@@ -447,9 +391,14 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
         onClose={handleCloseContextMenu}
         onReply={handleReply}
         onShowInfo={handleShowInfo}
-        onCopy={() => handleCopy(contextMenu.message)}
-        onEmojiReact={handleEmojiReact}
+        onCopy={() => {}}
+        onEmojiReact={() => {}}
         isDark={isDark}
+        selectedContact={selectedContact}
+        user={user}
+        messageReactions={messageReactions}
+        setMessageReactions={setMessageReactions}
+        setCopiedMessageId={setCopiedMessageId}
       />
       
       <MessageInfoModal
