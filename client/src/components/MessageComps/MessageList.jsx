@@ -153,7 +153,7 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
         if (data.roomId === selectedContact?.roomID) {
           setMessageReactions(prev => ({
             ...prev,
-            [data.messageId]: data.reactions
+            [data.messageId]: data.reaction
           }));
         }
       };
@@ -261,6 +261,25 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
   const handleEmojiReact = async (message, emoji) => {
     if (!message || !emoji || !selectedContact || !user) return;
 
+    const currentReaction = messageReactions[message.id];
+    let newReaction = null;
+
+    if (currentReaction && currentReaction.emoji === emoji && currentReaction.userId === user.uid) {
+      newReaction = null;
+    } else {
+      newReaction = {
+        emoji: emoji,
+        userId: user.uid,
+        userEmail: user.email,
+        timestamp: Date.now()
+      };
+    }
+
+    setMessageReactions(prev => ({
+      ...prev,
+      [message.id]: newReaction
+    }));
+
     try {
       const messageData = {
         messageId: message.id,
@@ -272,40 +291,11 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
 
       await chunkedMessageService.addReactionToMessage(selectedContact.roomID, messageData);
 
-      setMessageReactions(prev => {
-        const currentReactions = prev[message.id] || {};
-        const userReactions = currentReactions[user.uid] || [];
-        const existingReactionIndex = userReactions.findIndex(r => r.emoji === emoji);
-        
-        let updatedUserReactions;
-        if (existingReactionIndex !== -1) {
-          updatedUserReactions = userReactions.filter((_, index) => index !== existingReactionIndex);
-        } else {
-          updatedUserReactions = [...userReactions, { emoji, timestamp: Date.now() }];
-        }
-        
-        const updatedReactions = {
-          ...currentReactions,
-          [user.uid]: updatedUserReactions.length > 0 ? updatedUserReactions : undefined
-        };
-
-        Object.keys(updatedReactions).forEach(key => {
-          if (updatedReactions[key] === undefined) {
-            delete updatedReactions[key];
-          }
-        });
-
-        return {
-          ...prev,
-          [message.id]: updatedReactions
-        };
-      });
-
       if (socket) {
         socket.emit('message-reaction', {
           roomId: selectedContact.roomID,
           messageId: message.id,
-          emoji: emoji,
+          reaction: newReaction,
           userId: user.uid,
           userEmail: user.email,
           timestamp: Date.now()
@@ -314,6 +304,10 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
 
     } catch (error) {
       console.error('Error handling emoji reaction:', error);
+      setMessageReactions(prev => ({
+        ...prev,
+        [message.id]: currentReaction
+      }));
     }
   };
 
@@ -338,36 +332,20 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
     return messages.find(msg => msg.id === replyToId);
   };
 
-  const renderReactions = (message) => {
-    const reactions = messageReactions[message.id] || {};
-    const reactionCounts = {};
+  const renderReaction = (message) => {
+    const reaction = messageReactions[message.id];
     
-    Object.values(reactions).forEach(userReactions => {
-      if (Array.isArray(userReactions)) {
-        userReactions.forEach(reaction => {
-          if (reactionCounts[reaction.emoji]) {
-            reactionCounts[reaction.emoji]++;
-          } else {
-            reactionCounts[reaction.emoji] = 1;
-          }
-        });
-      }
-    });
+    if (!reaction) return null;
 
-    if (Object.keys(reactionCounts).length === 0) return null;
+    const isOwn = reaction.userId === user.uid;
 
     return (
-      <div className="message-reactions">
-        {Object.entries(reactionCounts).map(([emoji, count]) => (
-          <div 
-            key={emoji} 
-            className="reaction-bubble"
-            onClick={() => handleEmojiReact(message, emoji)}
-          >
-            <span className="reaction-emoji">{emoji}</span>
-            {count > 1 && <span className="reaction-count">{count}</span>}
-          </div>
-        ))}
+      <div 
+        className={`message-reaction ${isOwn ? 'own-reaction' : 'other-reaction'}`}
+        onClick={() => handleEmojiReact(message, reaction.emoji)}
+        title={`${isOwn ? 'You' : reaction.userEmail} reacted with ${reaction.emoji}`}
+      >
+        <span className="reaction-emoji">{reaction.emoji}</span>
       </div>
     );
   };
@@ -455,7 +433,7 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
                   selectedContact={selectedContact}
                 />
               </div>
-              {renderReactions(message)}
+              {renderReaction(message)}
             </div>
           </div>
         </div>

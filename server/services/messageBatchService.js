@@ -56,25 +56,24 @@ class MessageBatchService {
             }
 
             const message = messages[messageIndex];
-            const currentEmojis = message.em || {};
-            const userReactions = currentEmojis[userId] || [];
+            const currentReaction = message.em;
             
-            const existingReactionIndex = userReactions.findIndex(r => r.emoji === emoji);
+            let newReaction = null;
             
-            if (existingReactionIndex !== -1) {
-                userReactions.splice(existingReactionIndex, 1);
+            if (currentReaction && currentReaction.emoji === emoji && currentReaction.userId === userId) {
+                newReaction = null;
             } else {
-                userReactions.push({ emoji, timestamp: Date.now() });
+                newReaction = {
+                    emoji: emoji,
+                    userId: userId,
+                    userEmail: userEmail,
+                    timestamp: Date.now()
+                };
             }
             
-            if (userReactions.length > 0) {
-                currentEmojis[userId] = userReactions;
+            if (newReaction) {
+                messages[messageIndex].em = newReaction;
             } else {
-                delete currentEmojis[userId];
-            }
-            
-            messages[messageIndex].em = Object.keys(currentEmojis).length > 0 ? currentEmojis : undefined;
-            if (!messages[messageIndex].em) {
                 delete messages[messageIndex].em;
             }
 
@@ -83,7 +82,7 @@ class MessageBatchService {
                 updatedAt: new Date().toISOString()
             });
 
-            return currentEmojis;
+            return newReaction;
         } catch (error) {
             console.error('Error adding reaction to message:', error);
             throw error;

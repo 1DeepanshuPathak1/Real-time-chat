@@ -49,14 +49,12 @@ class SocketController {
             });
 
             socket.on('message-reaction', async (data) => {
-                const { roomId, messageId, emoji, userId, userEmail, timestamp } = data;
+                const { roomId, messageId, reaction, userId, userEmail, timestamp } = data;
                 try {
-                    const updatedReactions = await this.batchService.addReactionToMessage(roomId, messageId, emoji, userId, userEmail);
-                    
                     socket.to(roomId).emit('reaction-updated', {
                         roomId,
                         messageId,
-                        reactions: updatedReactions,
+                        reaction: reaction,
                         userId,
                         userEmail,
                         timestamp: timestamp || Date.now()
