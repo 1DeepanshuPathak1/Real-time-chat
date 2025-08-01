@@ -7,7 +7,7 @@ class MessageController {
     }
 
     async sendMessage(req, res) {
-        const { roomId, sender, content, type = 'text', fileName, fileSize, fileType, fileUrl } = req.body;
+        const { roomId, sender, content, type = 'text', fileName, fileSize, fileType, fileUrl, replyTo } = req.body;
 
         try {
             if (!roomId || !sender || !content) {
@@ -24,7 +24,8 @@ class MessageController {
                 ...(fileName && { fileName }),
                 ...(fileSize && { fileSize }),
                 ...(fileType && { fileType }),
-                ...(fileUrl && { fileUrl })
+                ...(fileUrl && { fileUrl }),
+                ...(replyTo && { replyTo })
             };
 
             const messageId = await this.batchService.addMessageToBatch(roomId, messageData);

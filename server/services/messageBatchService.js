@@ -22,7 +22,8 @@ class MessageBatchService {
             ...(messageData.fileName && { fn: messageData.fileName }),
             ...(messageData.fileSize && { fs: messageData.fileSize }),
             ...(messageData.fileType && { ft: messageData.fileType }),
-            ...(messageData.fileUrl && { fu: messageData.fileUrl })
+            ...(messageData.fileUrl && { fu: messageData.fileUrl }),
+            ...(messageData.replyTo && { r: messageData.replyTo })
         };
 
         const key = `pending_messages:${roomId}`;
@@ -235,7 +236,8 @@ class MessageBatchService {
             fileName: msg.fn || msg.fileName,
             fileSize: msg.fs || msg.fileSize,
             fileType: msg.ft || msg.fileType,
-            fileUrl: msg.fu || msg.fileUrl
+            fileUrl: msg.fu || msg.fileUrl,
+            replyTo: msg.r || msg.replyTo
         }));
     }
 }
