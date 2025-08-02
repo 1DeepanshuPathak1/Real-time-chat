@@ -169,7 +169,7 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
       root.style.setProperty('--bg-color', '#ffffff');
       root.style.setProperty('--text-color', '#1e293b');
       root.style.setProperty('--secondary-bg', '#f1f5f9');
-      root.style.setProperty('--border-color', '#e2e8f0');
+      root.style.setProperty('--border-color', '#3b82f6');
       root.style.setProperty('--accent-color', '#3b82f6');
       root.style.setProperty('--chat-bg', '#f8fafc');
       root.style.setProperty('--message-bg-sent', 'rgba(59, 130, 246, 0.4)');
@@ -292,21 +292,35 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
 
         <div className={`contact-list-footer ${showFooter ? 'show' : ''}`}>
           <div className="footer-content">
-            <div className="user-code">
-              <span>Code : {userCode}</span>
-              <button onClick={copyUserCode} className="copy-button">
-                {copied ? <Check size={16} /> : <Copy size={16} />}
-              </button>
+            <div className={`user-code ${copied ? 'copied' : ''}`} onClick={copyUserCode}>
+              <div className="user-code-content">
+                <span className="user-code-text">
+                  Code : {userCode}
+                </span>
+                <span className="user-code-hover-text">
+                  {copied ? 'Copied!' : 'Copy Code'}
+                </span>
+              </div>
             </div>
             <button
               onClick={handleThemeChange}
               className={`theme-toggle-button ${isDark ? 'dark' : 'light'}`}
               title="Toggle Theme"
             >
-              <span className={`theme-icon ${isDark ? 'dark' : 'light'}`}>
-                {isDark ? <FaMoon size={18} /> : <FaSun size={18} />}
-              </span>
-              <span className={`theme-text ${isDark ? 'dark' : 'light'}`}>{isDark ? 'Dark' : 'Light'}</span>
+              <div className="theme-content">
+                <div className="theme-current">
+                  <span className={`theme-icon ${isDark ? 'dark' : 'light'}`}>
+                    {isDark ? <FaMoon size={18} /> : <FaSun size={18} />}
+                  </span>
+                  <span className={`theme-text ${isDark ? 'dark' : 'light'}`}>{isDark ? 'Dark' : 'Light'}</span>
+                </div>
+                <div className="theme-hover">
+                  <span className={`theme-icon ${!isDark ? 'dark' : 'light'}`}>
+                    {!isDark ? <FaMoon size={18} /> : <FaSun size={18} />}
+                  </span>
+                  <span className={`theme-text ${!isDark ? 'dark' : 'light'}`}>{!isDark ? 'Dark' : 'Light'}</span>
+                </div>
+              </div>
             </button>
           </div>
         </div>
