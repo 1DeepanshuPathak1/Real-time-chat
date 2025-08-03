@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { UserPlus, Copy, Check, Users, Bell, ChevronUp, ChevronDown } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { UserPlus, Users, Bell, ChevronUp } from 'lucide-react';
 import { FaSun, FaMoon } from 'react-icons/fa';
 import { getFirestore, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { FriendRequestHandler } from './FriendRequestHandler';
 import { useContactStatus } from '../UserStatusManager';
 import { UnreadMessageCounter } from '../MessageComps/MessageStatus';
-import '../css/ContactList.css';
+import './css/ContactList.css';
 
-const ContactItem = ({ contact, selectedContact, onContactClick, handleContactClick, onStatusUpdate }) => {
+const ContactItem = ({ contact, selectedContact, handleContactClick, onStatusUpdate }) => {
   const status = useContactStatus(contact);
   const unreadCount = contact.unreadCount || 0;
 

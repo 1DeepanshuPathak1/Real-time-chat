@@ -38,7 +38,7 @@ export function DrawingCanvas({ onClose, onSend }) {
   const undo = () => {
     if (undoStack.length > 0) {
       const newStack = [...undoStack];
-      newStack.pop(); // Remove the last state
+      newStack.pop(); 
       setUndoStack(newStack);
       
       if (newStack.length > 0) {

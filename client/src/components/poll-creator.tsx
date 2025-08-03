@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { FiX, FiSend } from 'react-icons/fi';
 
 interface PollCreatorProps {

@@ -1,6 +1,5 @@
-import React from 'react';
 import { MessageCircle, Users, Sparkles } from 'lucide-react';
-import '../css/EmptyChat.css';
+import './css/EmptyChat.css';
 
 export const EmptyChat = () => {
   return (

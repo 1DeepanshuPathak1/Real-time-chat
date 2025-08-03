@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { FiSend, FiMic, FiSmile, FiPaperclip, FiImage, FiCamera, FiFile } from 'react-icons/fi';
+import './css/MessageInput.css'; 
 
 export const MessageInput = ({
   onSubmit,

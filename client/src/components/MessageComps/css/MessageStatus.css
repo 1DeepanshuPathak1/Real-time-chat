@@ -1,9 +1,28 @@
-.message-meta {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-  margin-top: 4px;
+.status-sent .status-dot {
+  background-color: #64748b;
+  box-shadow: 0 0 4px rgba(100, 116, 139, 0.3);
+}
+
+.status-delivered .status-dot {
+  background-color: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
+  animation: deliveredPulse 2s ease-in-out infinite;
+}
+
+.status-delivered .status-pulse {
+  background-color: rgba(245, 158, 11, 0.3);
+  animation: deliveredRipple 2s ease-in-out infinite;
+}
+
+.status-read .status-dot {
+  background-color: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+  animation: readGlow 1.5s ease-in-out infinite alternate;
+}
+
+.status-read .status-pulse {
+  background-color: rgba(16, 185, 129, 0.2);
+  animation: readRipple 1.5s ease-in-out infinite;
 }
 
 .message-status-indicator {
@@ -34,33 +53,6 @@
   opacity: 0;
   z-index: 1;
   transition: all 0.3s ease;
-}
-
-.status-sent .status-dot {
-  background-color: #64748b;
-  box-shadow: 0 0 4px rgba(100, 116, 139, 0.3);
-}
-
-.status-delivered .status-dot {
-  background-color: #f59e0b;
-  box-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
-  animation: deliveredPulse 2s ease-in-out infinite;
-}
-
-.status-delivered .status-pulse {
-  background-color: rgba(245, 158, 11, 0.3);
-  animation: deliveredRipple 2s ease-in-out infinite;
-}
-
-.status-read .status-dot {
-  background-color: #10b981;
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
-  animation: readGlow 1.5s ease-in-out infinite alternate;
-}
-
-.status-read .status-pulse {
-  background-color: rgba(16, 185, 129, 0.2);
-  animation: readRipple 1.5s ease-in-out infinite;
 }
 
 @keyframes deliveredPulse {
@@ -124,11 +116,4 @@
   0% { transform: scale(0); }
   50% { transform: scale(1.2); }
   100% { transform: scale(1); }
-}
-
-.contact-unread {
-  position: absolute;
-  right: 15px;
-  top: 50%;
-  transform: translateY(-50%);
 }

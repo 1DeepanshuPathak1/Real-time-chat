@@ -1,8 +1,8 @@
 .friend-requests-modal {
   position: absolute;
-  top: 65px;
+  top: 20px;
   right: 20px;
-  width: 380px;
+  width: 400px;
   max-height: 450px;
   background: linear-gradient(135deg, var(--secondary-bg), #2a2a2a);
   border: 1px solid rgba(18, 140, 126, 0.2);

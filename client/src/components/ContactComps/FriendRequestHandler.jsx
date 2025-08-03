@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { UserPlus, Check, X, Users, Bell } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Check, X, Users, Bell } from 'lucide-react';
 import { getFirestore, collection, query, onSnapshot } from 'firebase/firestore';
 import { useSocket } from '../../services/SocketService';
 import { API_ENDPOINTS } from '../../config/api';
-import '../css/FriendRequestHandler.css';
+import './css/FriendRequestHandler.css';
 
 export const FriendRequestHandler = ({ user }) => {
   const [friendRequests, setFriendRequests] = useState([]);

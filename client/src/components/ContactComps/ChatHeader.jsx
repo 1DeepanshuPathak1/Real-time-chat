@@ -1,5 +1,4 @@
-import React from 'react';
-import '../css/ChatHeader.css';
+import './css/ChatHeader.css';
 
 export const ChatHeader = ({ selectedContact, isDark, contactStatus }) => {
   if (!selectedContact) return null;

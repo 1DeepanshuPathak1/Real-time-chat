@@ -8,6 +8,7 @@ import { getFirestore, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { useSocket } from '../../services/SocketService';
 import chunkedMessageService from '../../services/chunkedMessageService';
 import './css/MessageReactions.css';
+import './css/MessageList.css'
 
 const db = getFirestore();
 

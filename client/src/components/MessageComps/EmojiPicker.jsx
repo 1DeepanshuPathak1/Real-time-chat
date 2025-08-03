@@ -1,4 +1,3 @@
-import React from 'react';
 import EmojiPicker from 'emoji-picker-react';
 
 export const EmojiPickerComponent = ({ onEmojiClick, show, theme }) => {

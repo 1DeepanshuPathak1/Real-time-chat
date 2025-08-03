@@ -1,4 +1,3 @@
-import React from 'react';
 import { FiX, FiCheck, FiCheckCircle, FiClock } from 'react-icons/fi';
 import './css/MessageInfoModal.css';
 

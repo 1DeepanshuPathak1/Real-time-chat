@@ -1,12 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { FiCornerUpLeft, FiInfo, FiCopy, FiPlus } from 'react-icons/fi';
 import { EmojiPickerComponent } from './EmojiPicker';
-import { getFirestore, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { useSocket } from '../../services/SocketService';
 import chunkedMessageService from '../../services/chunkedMessageService';
 import './css/MessageContextMenu.css';
-
-const db = getFirestore();
 
 export const MessageContextMenu = ({ 
   show, 
@@ -15,8 +12,6 @@ export const MessageContextMenu = ({
   onClose, 
   onReply, 
   onShowInfo, 
-  onCopy, 
-  onEmojiReact,
   isDark,
   selectedContact,
   user,
