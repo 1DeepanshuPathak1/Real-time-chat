@@ -49,6 +49,7 @@ function ChatContent() {
   const [currentChunkId, setCurrentChunkId] = useState(null);
   const [pullDistance, setPullDistance] = useState(0);
   const [isPulling, setIsPulling] = useState(false);
+  const [showStartMessage, setShowStartMessage] = useState(false);
   const [hasScrolledToUnread, setHasScrolledToUnread] = useState(false);
   const [firstUnreadIndex, setFirstUnreadIndex] = useState(-1);
   const [selectedContactStatus, setSelectedContactStatus] = useState({ isOnline: false, lastSeen: 'recently' });
