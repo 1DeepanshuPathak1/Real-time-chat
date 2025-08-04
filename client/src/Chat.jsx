@@ -54,7 +54,6 @@ function ChatContent() {
   const [firstUnreadIndex, setFirstUnreadIndex] = useState(-1);
   const [selectedContactStatus, setSelectedContactStatus] = useState({ isOnline: false, lastSeen: 'recently' });
   const [replyTo, setReplyTo] = useState(null);
-  const [authChecked, setAuthChecked] = useState(false);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -76,33 +75,18 @@ function ChatContent() {
   const { handleSendMessage, handleFileUpload } = useMessageHandlers(setMessages, socket, selectedContact, user);
 
   useEffect(() => {
-    let redirectTimeout;
-    
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
         console.log('User authenticated:', currentUser.email);
         setUser(currentUser);
-        setAuthChecked(true);
       } else {
-        console.log('No user authenticated');
-        setUser(null);
-        setAuthChecked(true);
-        
-        if (window.location.pathname === '/chat') {
-          redirectTimeout = setTimeout(() => {
-            navigate('/', { replace: true });
-          }, 100);
-        }
+        console.log('No user authenticated, redirecting to sign in');
+        navigate('/');
       }
       setLoading(false);
     });
 
-    return () => {
-      unsubscribe();
-      if (redirectTimeout) {
-        clearTimeout(redirectTimeout);
-      }
-    };
+    return () => unsubscribe();
   }, [navigate]);
 
   const updateContactUnreadCount = useCallback((roomId, updates) => {
@@ -438,7 +422,7 @@ function ChatContent() {
     setReplyTo(null);
   };
 
-  if (loading || !authChecked) {
+  if (loading) {
     return (
       <div className="loading-container">
         <div>Loading...</div>
@@ -447,11 +431,7 @@ function ChatContent() {
   }
 
   if (!user) {
-    return (
-      <div className="loading-container">
-        <div>Redirecting...</div>
-      </div>
-    );
+    return null;
   }
 
   return (
@@ -579,38 +559,22 @@ function ChatContent() {
 function Chat() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [authChecked, setAuthChecked] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    let redirectTimeout;
-    
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
-        setAuthChecked(true);
       } else {
-        setUser(null);
-        setAuthChecked(true);
-        
-        if (window.location.pathname === '/chat') {
-          redirectTimeout = setTimeout(() => {
-            navigate('/', { replace: true });
-          }, 100);
-        }
+        navigate('/');
       }
       setLoading(false);
     });
 
-    return () => {
-      unsubscribe();
-      if (redirectTimeout) {
-        clearTimeout(redirectTimeout);
-      }
-    };
+    return () => unsubscribe();
   }, [navigate]);
 
-  if (loading || !authChecked) {
+  if (loading) {
     return (
       <div className="loading-container">
         <div>Loading...</div>
@@ -619,11 +583,7 @@ function Chat() {
   }
 
   if (!user) {
-    return (
-      <div className="loading-container">
-        <div>Redirecting...</div>
-      </div>
-    );
+    return null;
   }
 
   return (
