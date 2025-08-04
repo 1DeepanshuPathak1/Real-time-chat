@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, query, onSnapshot, orderBy, limit, getDocs, where, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { getFirestore, collection, query, onSnapshot, orderBy, limit, getDocs, doc, getDoc } from 'firebase/firestore';
 import { SocketProvider, useSocket } from './services/SocketService';
 import { EmojiPickerComponent } from './components/MessageComps/EmojiPicker';
 import { ReplyMessage } from './components/MessageComps/ReplyMessage';
@@ -14,7 +14,7 @@ import { CameraOverlay } from './components/CameraComps/CameraOverlay';
 import { MessageInput } from './components/MessageComps/MessageInput';
 import { useCameraHandlers } from './components/CameraComps/CameraHandlers';
 import { useMessageHandlers } from './components/MessageComps/MessageHandlers';
-import { useUserStatus, useContactStatus } from './components/UserStatusManager';
+import { useUserStatus } from './components/UserStatusManager';
 import chunkedMessageService from './services/chunkedMessageService';
 import './css/Chat.css';
 import { useNavigate } from 'react-router-dom';
@@ -49,7 +49,6 @@ function ChatContent() {
   const [currentChunkId, setCurrentChunkId] = useState(null);
   const [pullDistance, setPullDistance] = useState(0);
   const [isPulling, setIsPulling] = useState(false);
-  const [showStartMessage, setShowStartMessage] = useState(false);
   const [hasScrolledToUnread, setHasScrolledToUnread] = useState(false);
   const [firstUnreadIndex, setFirstUnreadIndex] = useState(-1);
   const [selectedContactStatus, setSelectedContactStatus] = useState({ isOnline: false, lastSeen: 'recently' });

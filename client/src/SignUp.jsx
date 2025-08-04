@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
-import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_ENDPOINTS } from './config/api';
 import './css/signin.css';
@@ -17,7 +16,6 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
 
 function SignUp() {
   const [formData, setFormData] = useState({
@@ -44,9 +42,9 @@ function SignUp() {
         },
         body: JSON.stringify({ email }),
       });
-      return response.ok; // if ok, user exists
+      return response.ok; 
     } catch (error) {
-      return false; // if error, user doesn't exist
+      return false; 
     }
   };
 
@@ -82,7 +80,6 @@ function SignUp() {
     }
 
     try {
-      // First check if user exists in our database
       const userExists = await checkIfUserExists(formData.email);
       if (userExists) {
         setErrorMessage('An account with this email already exists. Please sign in.');
@@ -90,22 +87,18 @@ function SignUp() {
         return;
       }
 
-      // If user doesn't exist, create Firebase auth user
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       
       try {
-        // Then create user in our database
         await createUserInDb({
           uid: userCredential.user.uid,
           name: `${formData.firstName} ${formData.lastName}`,
           email: formData.email
         });
         
-        // If successful, redirect to sign in
         setErrorMessage('Account created successfully! Please sign in.');
         setTimeout(() => navigate('/'), 2000);
       } catch (dbError) {
-        // If database creation fails, delete the Firebase auth user
         await userCredential.user.delete();
         throw new Error('Failed to create user profile. Please try again.');
       }

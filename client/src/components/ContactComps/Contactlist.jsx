@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { UserPlus, Users, Bell, ChevronUp } from 'lucide-react';
 import { FaSun, FaMoon } from 'react-icons/fa';
-import { getFirestore, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { FriendRequestHandler } from './FriendRequestHandler';
 import { useContactStatus } from '../UserStatusManager';
 import { UnreadMessageCounter } from '../MessageComps/MessageStatus';
@@ -48,15 +48,6 @@ const ContactItem = ({ contact, selectedContact, handleContactClick, onStatusUpd
   );
 };
 
-const generateUserCode = () => {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = '';
-  for (let i = 0; i < 8; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-};
-
 export const ContactList = ({ contacts, selectedContact, onContactClick, user, onThemeChange, isDark, onContactUpdate, onContactStatusUpdate }) => {
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [friendEmail, setFriendEmail] = useState('');
@@ -73,47 +64,29 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
   }, [showFooter]);
 
   useEffect(() => {
-    const fetchOrCreateUserCode = async () => {
+    const fetchUserCode = async () => {
       if (user?.uid) {
         try {
           const userDocRef = doc(db, 'users', user.uid);
           const userDoc = await getDoc(userDocRef);
-
+          
           if (userDoc.exists()) {
             const userData = userDoc.data();
-            if (userData.userCode) {
-              setUserCode(userData.userCode);
-            } else {
-              const newUserCode = generateUserCode();
-              await updateDoc(userDocRef, {
-                userCode: newUserCode
-              });
-              setUserCode(newUserCode);
-            }
+            setUserCode(userData.userCode || 'ERROR');
           } else {
-            const newUserCode = generateUserCode();
-            await setDoc(userDocRef, {
-              userCode: newUserCode,
-              email: user.email,
-              uid: user.uid,
-              isOnline: true,
-              lastSeenTimestamp: Date.now()
-            });
-            setUserCode(newUserCode);
+            setUserCode('ERROR');
           }
         } catch (error) {
           console.error('Error fetching user code:', error);
-          if (userCode === 'LOADING...') {
-            setUserCode('ERROR');
-          }
+          setUserCode('ERROR');
         }
       }
     };
 
     if (userCode === 'LOADING...') {
-      fetchOrCreateUserCode();
+      fetchUserCode();
     }
-  }, [user?.uid, user?.email, db, userCode]);
+  }, [user?.uid, db, userCode]);
 
   const {
     showRequests,

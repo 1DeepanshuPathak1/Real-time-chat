@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, deleteUser } from 'firebase/auth';
 import { useNavigate, Link } from 'react-router-dom';
@@ -50,7 +50,6 @@ function SignIn() {
     setIsLoading(true);
     
     try {
-      // First verify if user exists in our database
       try {
         await verifyUser(email);
       } catch (error) {
@@ -62,10 +61,8 @@ function SignIn() {
         throw error;
       }
 
-      // If user exists, try to sign in
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       if (!userCredential.user.emailVerified) {
-        // Optional: You can still let them sign in but show a warning
         console.warn('Email not verified');
       }
       navigate('/chat');
