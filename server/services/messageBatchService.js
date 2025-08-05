@@ -19,6 +19,10 @@ class MessageBatchService extends EnhancedCacheService {
             t: Date.now(),
             ty: messageData.type || 'text',
             ...(messageData.fileName && { fn: messageData.fileName }),
+            ...(messageData.fileSize && { fs: messageData.fileSize }),
+            ...(messageData.fileType && { ft: messageData.fileType }),
+            ...(messageData.originalSize && { os: messageData.originalSize }),
+            ...(messageData.compressedSize && { cs: messageData.compressedSize }),
             ...(messageData.replyTo && { r: messageData.replyTo })
         };
 
@@ -30,6 +34,43 @@ class MessageBatchService extends EnhancedCacheService {
         await this.markChunkDirty(roomId, currentChunkId);
 
         return messageId;
+    }
+
+    decompressLZW(compressed) {
+        try {
+            const data = atob(compressed);
+            const codes = Array.from(data).map(c => c.charCodeAt(0));
+            const dict = {};
+            let dictSize = 256;
+            let result = '';
+            let w = String.fromCharCode(codes[0]);
+            result += w;
+            
+            for (let i = 0; i < 256; i++) {
+                dict[i] = String.fromCharCode(i);
+            }
+            
+            for (let i = 1; i < codes.length; i++) {
+                const k = codes[i];
+                let entry;
+                
+                if (dict[k]) {
+                    entry = dict[k];
+                } else if (k === dictSize) {
+                    entry = w + w[0];
+                } else {
+                    throw new Error('Invalid compression');
+                }
+                
+                result += entry;
+                dict[dictSize++] = w + entry[0];
+                w = entry;
+            }
+            
+            return atob(result);
+        } catch (error) {
+            return compressed;
+        }
     }
 
     async getLatestMessages(roomId) {
@@ -363,6 +404,59 @@ class MessageBatchService extends EnhancedCacheService {
 
     async getMessagesFromRedis(roomId) {
         return await this.getPendingMessages(roomId);
+    }
+
+    async getCurrentChunkId(roomId) {
+        return await this.getLatestChunkId(roomId);
+    }
+
+    async hasOlderChunks(roomId, chunkId) {
+        const chunkNumber = parseInt(chunkId.split('_')[1]);
+        return chunkNumber > 1;
+    }
+
+    async getCachedUnreadCount(roomId, userId) {
+        const redis = await connectRedis();
+        const cached = await redis.get(`unread:${roomId}:${userId}`);
+        return cached ? parseInt(cached) : null;
+    }
+
+    async cacheUnreadCount(roomId, userId, count) {
+        const redis = await connectRedis();
+        await redis.setEx(`unread:${roomId}:${userId}`, 300, count.toString());
+    }
+
+    async getCachedRoomMetadata(roomId) {
+        const redis = await connectRedis();
+        const cached = await redis.get(`room_meta:${roomId}`);
+        return cached ? JSON.parse(cached) : null;
+    }
+
+    async cacheRoomMetadata(roomId, metadata) {
+        const redis = await connectRedis();
+        await redis.setEx(`room_meta:${roomId}`, 600, JSON.stringify(metadata));
+    }
+
+    async getCachedContactList(userId) {
+        const redis = await connectRedis();
+        const cached = await redis.get(`contacts:${userId}`);
+        return cached ? JSON.parse(cached) : null;
+    }
+
+    async cacheContactList(userId, contacts) {
+        const redis = await connectRedis();
+        await redis.setEx(`contacts:${userId}`, 300, JSON.stringify(contacts));
+    }
+
+    async getCachedUserStatus(userId) {
+        const redis = await connectRedis();
+        const cached = await redis.get(`user_status:${userId}`);
+        return cached ? JSON.parse(cached) : null;
+    }
+
+    async cacheUserStatus(userId, status) {
+        const redis = await connectRedis();
+        await redis.setEx(`user_status:${userId}`, 120, JSON.stringify(status));
     }
 }
 

@@ -58,6 +58,24 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
 
     setIsSending(true);
 
+    const tempUrl = URL.createObjectURL(file);
+    const tempMessage = {
+      id: `temp_${Date.now()}`,
+      sender: user.email,
+      content: tempUrl,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: Date.now(),
+      type: type,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      isDelivered: false,
+      isRead: false,
+      isTemp: true
+    };
+
+    setMessages(prevMessages => [...prevMessages, tempMessage]);
+
     try {
       const messageData = {
         sender: user.email,
@@ -65,26 +83,19 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
         type: type,
         fileName: file.name,
         fileSize: file.size,
-        fileType: file.type
+        fileType: file.type,
+        fileContent: file
       };
 
       const messageId = await chunkedMessageService.sendMessage(selectedContact.roomID, messageData);
 
-      const newMessage = {
-        id: messageId,
-        sender: user.email,
-        content: URL.createObjectURL(file),
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        timestamp: new Date().toISOString(),
-        type: type,
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type,
-        isDelivered: false,
-        isRead: false
-      };
-
-      setMessages(prevMessages => [...prevMessages, newMessage]);
+      setMessages(prevMessages => 
+        prevMessages.map(msg => 
+          msg.id === tempMessage.id 
+            ? { ...msg, id: messageId, isTemp: false, isDelivered: true }
+            : msg
+        )
+      );
 
       if (socket) {
         socket.emit('send-message', {
@@ -94,12 +105,15 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
           messageId: messageId,
           type: type,
           fileName: file.name,
-          timestamp: newMessage.timestamp
+          timestamp: tempMessage.timestamp
         });
       }
 
     } catch (error) {
       console.error('Error uploading file:', error);
+      setMessages(prevMessages => 
+        prevMessages.filter(msg => msg.id !== tempMessage.id)
+      );
     } finally {
       setIsSending(false);
     }

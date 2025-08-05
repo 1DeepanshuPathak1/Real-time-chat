@@ -26,8 +26,8 @@ const configureServer = () => {
         optionsSuccessStatus: 200
     }));
 
-    app.use(express.json());
-    app.use(express.urlencoded({ extended: true }));
+    app.use(express.json({ limit: '10mb' }));
+    app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
     app.use((req, res, next) => {
         res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
@@ -48,7 +48,8 @@ const configureServer = () => {
             methods: ["GET", "POST"],
             allowedHeaders: ["Content-Type"],
             credentials: true
-        }
+        },
+        maxHttpBufferSize: 1e7
     });
 
     return { app, server, io };

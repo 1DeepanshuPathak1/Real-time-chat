@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { FiFile } from 'react-icons/fi';
+import { FiFile, FiDownload } from 'react-icons/fi';
 import { MessageStatusIndicator } from './MessageStatus';
 import { MessageContextMenu } from './MessageContextMenu';
 import { MessageInfoModal } from './MessageInfoModal';
@@ -29,8 +29,10 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
       try {
         const roomRef = doc(db, 'rooms', selectedContact.roomID);
         const roomDoc = await getDoc(roomRef);
-        const roomData = roomDoc.data();
-        lastReadMessageId.current = roomData?.[`lastReadMessageId_${user.uid}`] || null;
+        if (roomDoc.exists()) {
+          const roomData = roomDoc.data();
+          lastReadMessageId.current = roomData?.[`lastReadMessageId_${user.uid}`] || null;
+        }
       } catch (error) {
         console.error('Error fetching last read message ID:', error);
       }
@@ -99,22 +101,24 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
       
       try {
         const roomRef = doc(db, 'rooms', selectedContact.roomID);
-        await updateDoc(roomRef, {
-          [`lastReadMessageId_${user.uid}`]: lastUnreadMessage.id,
-          [`lastReadTimestamp_${user.uid}`]: Date.now()
-        });
-
-        lastReadMessageId.current = lastUnreadMessage.id;
-
-        if (socket) {
-          socket.emit('mark-messages-read', {
-            roomId: selectedContact.roomID,
-            lastReadMessageId: lastUnreadMessage.id,
-            userId: user.uid,
-            userEmail: user.email
+        const roomDoc = await getDoc(roomRef);
+        if (roomDoc.exists()) {
+          await updateDoc(roomRef, {
+            [`lastReadMessageId_${user.uid}`]: lastUnreadMessage.id,
+            [`lastReadTimestamp_${user.uid}`]: Date.now()
           });
-        }
 
+          lastReadMessageId.current = lastUnreadMessage.id;
+
+          if (socket) {
+            socket.emit('mark-messages-read', {
+              roomId: selectedContact.roomID,
+              lastReadMessageId: lastUnreadMessage.id,
+              userId: user.uid,
+              userEmail: user.email
+            });
+          }
+        }
       } catch (error) {
         console.error('Error marking messages as read:', error);
       }
@@ -236,6 +240,25 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
     return messages.find(msg => msg.id === replyToId);
   };
 
+  const handleDownloadDocument = (message) => {
+    try {
+      if (message.type === 'document' && message.content) {
+        const decompressed = chunkedMessageService.decompressContent(message.content, 'document');
+        const blob = new Blob([decompressed], { type: message.fileType || 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = message.fileName || 'document';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      console.error('Error downloading document:', error);
+    }
+  };
+
   const renderReactions = (message) => {
     const reactions = messageReactions[message.id];
     
@@ -348,12 +371,25 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
       return <img src={message.content} alt="Shared" className="shared-image" />;
     } else if (message.type === 'document') {
       return (
-        <div
-          className="document-message cursor-pointer hover:bg-gray-100"
-          onClick={() => handleDocumentClick(message.fileUrl || message.content)}
-        >
-          <FiFile className="document-icon" />
-          <span>{message.fileName || message.content}</span>
+        <div className="document-message">
+          <div className="document-info">
+            <FiFile className="document-icon" />
+            <div className="document-details">
+              <span className="document-name">{message.fileName || message.content}</span>
+              {message.fileSize && (
+                <span className="document-size">
+                  {(message.fileSize / 1024).toFixed(1)} KB
+                </span>
+              )}
+            </div>
+          </div>
+          <button 
+            className="document-download-btn"
+            onClick={() => handleDownloadDocument(message)}
+            title="Download document"
+          >
+            <FiDownload />
+          </button>
         </div>
       );
     } else {

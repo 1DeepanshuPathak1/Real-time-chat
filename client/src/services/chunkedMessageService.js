@@ -7,6 +7,9 @@ class ChunkedMessageService {
     constructor() {
         this.cache = new Map();
         this.cacheTimeout = 300000;
+        this.retryAttempts = 3;
+        this.retryDelay = 1000;
+        this.messagesPerChunk = 50;
     }
 
     async getLatestMessages(roomId) {
@@ -134,6 +137,17 @@ class ChunkedMessageService {
 
     async sendMessage(roomId, messageData) {
         try {
+            let processedData = { ...messageData };
+            
+            if (messageData.type === 'image' || messageData.type === 'document') {
+                if (messageData.fileContent) {
+                    processedData.content = await this.compressFile(messageData.fileContent, messageData.type);
+                    processedData.originalSize = messageData.fileContent.size;
+                    processedData.compressedSize = processedData.content.length;
+                    delete processedData.fileContent;
+                }
+            }
+
             const response = await this.fetchWithRetry(`${API_BASE_URL}/api/messages/send`, {
                 method: 'POST',
                 headers: {
@@ -141,7 +155,7 @@ class ChunkedMessageService {
                 },
                 body: JSON.stringify({
                     roomId,
-                    ...messageData
+                    ...processedData
                 })
             });
 
@@ -157,6 +171,145 @@ class ChunkedMessageService {
         } catch (error) {
             console.error('Error sending message:', error);
             throw error;
+        }
+    }
+
+    async compressFile(file, type) {
+        return new Promise((resolve) => {
+            if (type === 'image') {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const img = new Image();
+                
+                img.onload = () => {
+                    const maxSize = 500;
+                    let { width, height } = img;
+                    
+                    if (width > height) {
+                        if (width > maxSize) {
+                            height *= maxSize / width;
+                            width = maxSize;
+                        }
+                    } else {
+                        if (height > maxSize) {
+                            width *= maxSize / height;
+                            height = maxSize;
+                        }
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    let compressed = canvas.toDataURL('image/jpeg', 0.3);
+                    const sizeInBytes = compressed.length * 0.75;
+                    
+                    if (sizeInBytes > 30000) {
+                        canvas.width = width * 0.7;
+                        canvas.height = height * 0.7;
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        compressed = canvas.toDataURL('image/jpeg', 0.2);
+                    }
+                    
+                    console.log(`Image compressed: ${file.size} bytes -> ${sizeInBytes} bytes (${Math.round((1 - sizeInBytes/file.size) * 100)}% reduction)`);
+                    resolve(compressed);
+                };
+                
+                img.src = URL.createObjectURL(file);
+            } else {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const text = e.target.result;
+                    const compressed = this.lzwCompress(text);
+                    const compressionRatio = Math.round((1 - compressed.length/text.length) * 100);
+                    console.log(`Document compressed: ${text.length} chars -> ${compressed.length} chars (${compressionRatio}% reduction)`);
+                    resolve(compressed);
+                };
+                reader.readAsText(file);
+            }
+        });
+    }
+
+    lzwCompress(data) {
+        if (!data || data.length === 0) return '';
+        
+        const dict = {};
+        let result = [];
+        let dictSize = 256;
+        let w = '';
+        
+        for (let i = 0; i < 256; i++) {
+            dict[String.fromCharCode(i)] = i;
+        }
+        
+        for (let i = 0; i < data.length; i++) {
+            const c = data[i];
+            const wc = w + c;
+            
+            if (dict[wc] !== undefined) {
+                w = wc;
+            } else {
+                result.push(dict[w]);
+                dict[wc] = dictSize++;
+                w = c;
+            }
+        }
+        
+        if (w !== '') {
+            result.push(dict[w]);
+        }
+        
+        return btoa(String.fromCharCode(...result.map(n => n & 0xFF)));
+    }
+
+    decompressContent(content, type) {
+        if (type === 'image') {
+            return content;
+        } else if (type === 'document') {
+            return this.lzwDecompress(content);
+        }
+        return content;
+    }
+
+    lzwDecompress(compressed) {
+        try {
+            if (!compressed) return '';
+            
+            const data = atob(compressed);
+            const codes = Array.from(data).map(c => c.charCodeAt(0));
+            const dict = {};
+            let dictSize = 256;
+            let result = '';
+            
+            if (codes.length === 0) return '';
+            
+            let w = String.fromCharCode(codes[0]);
+            result += w;
+            
+            for (let i = 0; i < 256; i++) {
+                dict[i] = String.fromCharCode(i);
+            }
+            
+            for (let i = 1; i < codes.length; i++) {
+                const k = codes[i];
+                let entry;
+                
+                if (dict[k] !== undefined) {
+                    entry = dict[k];
+                } else if (k === dictSize) {
+                    entry = w + w[0];
+                } else {
+                    return compressed;
+                }
+                
+                result += entry;
+                dict[dictSize++] = w + entry[0];
+                w = entry;
+            }
+            
+            return result;
+        } catch (error) {
+            return compressed;
         }
     }
 
@@ -313,10 +466,18 @@ class ChunkedMessageService {
             if (!msg) return null;
             
             const timestamp = msg.t || msg.timestamp || msg.time || Date.now();
+            let content = msg.c || msg.content;
+            
+            if (msg.ty === 'image' || msg.type === 'image') {
+                content = content;
+            } else if (msg.ty === 'document' || msg.type === 'document') {
+                content = this.decompressContent(content, 'document');
+            }
+            
             return {
                 id: msg.i || msg.id,
                 sender: msg.s || msg.sender,
-                content: msg.c || msg.content,
+                content: content,
                 time: new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 timestamp: timestamp,
                 type: msg.ty || msg.type || 'text',

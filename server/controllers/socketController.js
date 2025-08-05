@@ -19,15 +19,28 @@ class SocketController {
             });
 
             socket.on('send-message', async (data) => {
-                const { roomID, message, sender, messageId, type, replyTo } = data;
+                const { roomID, message, sender, messageId, type, replyTo, fileName } = data;
                 try {
+                    let processedContent = message;
+                    
+                    if (type === 'image' || type === 'document') {
+                        const chunks = await this.batchService.getChunksFromCache(roomID, 1);
+                        if (chunks.length > 0) {
+                            const foundMessage = chunks[0].messages.find(msg => msg.id === messageId);
+                            if (foundMessage && foundMessage.content) {
+                                processedContent = foundMessage.content;
+                            }
+                        }
+                    }
+
                     this.io.to(roomID).emit('received-message', {
                         roomID,
                         sender,
-                        message,
+                        message: processedContent,
                         messageId,
                         timestamp: data.timestamp,
                         type: type || 'text',
+                        fileName: fileName,
                         ...(replyTo && { replyTo })
                     });
 
