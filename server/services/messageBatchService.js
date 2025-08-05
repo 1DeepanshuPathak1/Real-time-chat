@@ -1,10 +1,9 @@
 const { connectRedis } = require('../config/redisConfig');
+const EnhancedCacheService = require('./enhancedCacheService');
 
-class MessageBatchService {
+class MessageBatchService extends EnhancedCacheService {
     constructor(db) {
-        this.db = db;
-        this.pendingMessages = new Map();
-        this.batchWriteInterval = 5000;
+        super(db);
         this.maxBatchSize = 50;
         this.startBatchProcessor();
     }
@@ -20,9 +19,6 @@ class MessageBatchService {
             t: Date.now(),
             ty: messageData.type || 'text',
             ...(messageData.fileName && { fn: messageData.fileName }),
-            ...(messageData.fileSize && { fs: messageData.fileSize }),
-            ...(messageData.fileType && { ft: messageData.fileType }),
-            ...(messageData.fileUrl && { fu: messageData.fileUrl }),
             ...(messageData.replyTo && { r: messageData.replyTo })
         };
 
@@ -30,76 +26,180 @@ class MessageBatchService {
         await redis.lPush(key, JSON.stringify(messageWithId));
         await redis.expire(key, 300);
 
+        const currentChunkId = await this.getCurrentChunkId(roomId);
+        await this.markChunkDirty(roomId, currentChunkId);
+
         return messageId;
+    }
+
+    async getLatestMessages(roomId) {
+        try {
+            const chunks = await this.getChunksFromCache(roomId, 2);
+            
+            if (chunks.length === 0) {
+                return { messages: [], chunkId: 'chunk_1', hasMore: false };
+            }
+
+            const latestChunk = chunks[chunks.length - 1];
+            const allMessages = chunks.flatMap(chunk => chunk.messages);
+
+            return {
+                messages: allMessages,
+                chunkId: latestChunk.id,
+                hasMore: chunks.length > 1 || chunks[0].hasMore
+            };
+        } catch (error) {
+            console.error('Error fetching latest messages:', error);
+            return { messages: [], chunkId: null, hasMore: false };
+        }
+    }
+
+    async getLatestChunk(roomId) {
+        const chunks = await this.getChunksFromCache(roomId, 1);
+        return chunks[0] || { id: 'chunk_1', messages: [], hasMore: false };
+    }
+
+    async getOlderMessages(roomId, currentChunkId) {
+        try {
+            const currentChunkNumber = parseInt(currentChunkId.split('_')[1]);
+            const olderChunkNumber = currentChunkNumber - 1;
+
+            if (olderChunkNumber < 1) {
+                return { messages: [], chunkId: null, hasMore: false };
+            }
+
+            const olderChunkId = `chunk_${olderChunkNumber}`;
+            const chunks = await this.getChunksFromCache(roomId, 1);
+            
+            const olderChunk = chunks.find(chunk => chunk.id === olderChunkId) || 
+                             await this.loadChunkFromDB(roomId, olderChunkId);
+
+            if (!olderChunk) {
+                return { messages: [], chunkId: null, hasMore: false };
+            }
+
+            return {
+                messages: olderChunk.messages,
+                chunkId: olderChunk.id,
+                hasMore: await this.hasOlderChunks(roomId, olderChunk.id)
+            };
+        } catch (error) {
+            console.error('Error fetching older messages:', error);
+            return { messages: [], chunkId: null, hasMore: false };
+        }
     }
 
     async addReactionToMessage(roomId, messageId, emoji, userName, remove = false) {
         try {
-            const chunkRef = await this.findMessageChunk(roomId, messageId);
-            if (!chunkRef) {
-                throw new Error(`Message ${messageId} not found in any chunk`);
-            }
-
-            const chunkDoc = await chunkRef.get();
-            if (!chunkDoc.exists) {
-                throw new Error(`Chunk does not exist`);
-            }
-
-            const chunkData = chunkDoc.data();
-            const messages = chunkData.messages || [];
+            const chunks = await this.getChunksFromCache(roomId, 5);
             
-            const messageIndex = messages.findIndex(msg => (msg.i || msg.id) === messageId);
-            if (messageIndex === -1) {
-                throw new Error(`Message ${messageId} not found in chunk`);
-            }
+            for (const chunk of chunks) {
+                const messageIndex = chunk.messages.findIndex(msg => msg.id === messageId);
+                
+                if (messageIndex !== -1) {
+                    const message = chunk.messages[messageIndex];
+                    let reactions = message.em || {};
 
-            const message = messages[messageIndex];
-            let reactions = message.em || {};
+                    if (remove) {
+                        if (reactions[emoji]) {
+                            reactions[emoji] = reactions[emoji].filter(user => user !== userName);
+                            if (reactions[emoji].length === 0) {
+                                delete reactions[emoji];
+                            }
+                        }
+                    } else {
+                        for (const [existingEmoji, users] of Object.entries(reactions)) {
+                            const userIndex = users.indexOf(userName);
+                            if (userIndex > -1) {
+                                users.splice(userIndex, 1);
+                                if (users.length === 0) {
+                                    delete reactions[existingEmoji];
+                                }
+                            }
+                        }
 
-            if (remove) {
-                if (reactions[emoji]) {
-                    reactions[emoji] = reactions[emoji].filter(user => user !== userName);
-                    if (reactions[emoji].length === 0) {
-                        delete reactions[emoji];
-                    }
-                }
-            } else {
-                for (const [existingEmoji, users] of Object.entries(reactions)) {
-                    const userIndex = users.indexOf(userName);
-                    if (userIndex > -1) {
-                        users.splice(userIndex, 1);
-                        if (users.length === 0) {
-                            delete reactions[existingEmoji];
+                        if (!reactions[emoji]) {
+                            reactions[emoji] = [];
+                        }
+                        if (!reactions[emoji].includes(userName)) {
+                            reactions[emoji].push(userName);
+                        }
+
+                        if (Object.keys(reactions).length > 2) {
+                            const reactionKeys = Object.keys(reactions);
+                            const oldestReaction = reactionKeys[0];
+                            delete reactions[oldestReaction];
                         }
                     }
-                }
 
-                if (!reactions[emoji]) {
-                    reactions[emoji] = [];
-                }
-                if (!reactions[emoji].includes(userName)) {
-                    reactions[emoji].push(userName);
-                }
+                    if (Object.keys(reactions).length === 0) {
+                        delete chunk.messages[messageIndex].em;
+                    } else {
+                        chunk.messages[messageIndex].em = reactions;
+                    }
 
-                if (Object.keys(reactions).length > 2) {
-                    const reactionKeys = Object.keys(reactions);
-                    const oldestReaction = reactionKeys[0];
-                    delete reactions[oldestReaction];
+                    await this.markChunkDirty(roomId, chunk.id);
+                    await this.cacheChunk(roomId, chunk.id, chunk);
+
+                    return reactions;
                 }
             }
 
-            if (Object.keys(reactions).length === 0) {
-                delete messages[messageIndex].em;
-            } else {
-                messages[messageIndex].em = reactions;
+            const chunkRef = await this.findMessageChunk(roomId, messageId);
+            if (chunkRef) {
+                const chunkDoc = await chunkRef.get();
+                if (chunkDoc.exists) {
+                    const chunkData = chunkDoc.data();
+                    const messages = chunkData.messages || [];
+                    
+                    const messageIndex = messages.findIndex(msg => (msg.i || msg.id) === messageId);
+                    if (messageIndex !== -1) {
+                        const message = messages[messageIndex];
+                        let reactions = message.em || {};
+
+                        if (remove) {
+                            if (reactions[emoji]) {
+                                reactions[emoji] = reactions[emoji].filter(user => user !== userName);
+                                if (reactions[emoji].length === 0) {
+                                    delete reactions[emoji];
+                                }
+                            }
+                        } else {
+                            for (const [existingEmoji, users] of Object.entries(reactions)) {
+                                const userIndex = users.indexOf(userName);
+                                if (userIndex > -1) {
+                                    users.splice(userIndex, 1);
+                                    if (users.length === 0) {
+                                        delete reactions[existingEmoji];
+                                    }
+                                }
+                            }
+
+                            if (!reactions[emoji]) {
+                                reactions[emoji] = [];
+                            }
+                            if (!reactions[emoji].includes(userName)) {
+                                reactions[emoji].push(userName);
+                            }
+                        }
+
+                        if (Object.keys(reactions).length === 0) {
+                            delete messages[messageIndex].em;
+                        } else {
+                            messages[messageIndex].em = reactions;
+                        }
+
+                        await chunkRef.update({
+                            messages: messages,
+                            updatedAt: new Date().toISOString()
+                        });
+
+                        return reactions;
+                    }
+                }
             }
 
-            await chunkRef.update({
-                messages: messages,
-                updatedAt: new Date().toISOString()
-            });
-
-            return reactions;
+            throw new Error(`Message ${messageId} not found`);
         } catch (error) {
             console.error('Error updating reaction:', error);
             throw error;
@@ -128,12 +228,6 @@ class MessageBatchService {
         }
     }
 
-    async getCurrentChunkId(roomId) {
-        const redis = await connectRedis();
-        const currentChunk = await redis.get(`current_chunk:${roomId}`);
-        return currentChunk || 'chunk_1';
-    }
-
     async incrementChunkIfNeeded(roomId, currentChunkId) {
         const redis = await connectRedis();
         const chunkSize = await redis.get(`chunk_size:${roomId}:${currentChunkId}`) || 0;
@@ -152,7 +246,7 @@ class MessageBatchService {
     startBatchProcessor() {
         setInterval(async () => {
             await this.processBatchWrites();
-        }, this.batchWriteInterval);
+        }, 5000);
     }
 
     async processBatchWrites() {
@@ -168,7 +262,6 @@ class MessageBatchService {
     async processBatchForRoom(roomId) {
         const redis = await connectRedis();
         const key = `pending_messages:${roomId}`;
-
         const pendingMessages = [];
         let message;
 
@@ -179,73 +272,63 @@ class MessageBatchService {
 
         if (pendingMessages.length === 0) return;
 
-        const currentChunkId = await this.getCurrentChunkId(roomId);
-        const newChunkId = await this.incrementChunkIfNeeded(roomId, currentChunkId);
+        const currentChunkId = await this.getLatestChunkId(roomId);
+        const cacheKey = `chunk:${roomId}:${currentChunkId}`;
+        const cached = await redis.get(cacheKey);
+        
+        let existingMessages = [];
+        if (cached) {
+            const cachedData = JSON.parse(cached);
+            existingMessages = cachedData.messages || [];
+        }
 
-        try {
-            const batch = this.db.batch();
-            const chunkRef = this.db.collection('rooms').doc(roomId).collection('messageChunks').doc(newChunkId);
+        const formattedPendingMessages = this.formatMessages(pendingMessages);
+        const allMessages = [...existingMessages, ...formattedPendingMessages];
 
-            const existingChunk = await chunkRef.get();
-            const existingMessages = existingChunk.exists ? existingChunk.data().messages || [] : [];
+        if (allMessages.length > this.maxBatchSize) {
+            const newChunkNumber = parseInt(currentChunkId.split('_')[1]) + 1;
+            const newChunkId = `chunk_${newChunkNumber}`;
+            
+            const splitPoint = this.maxBatchSize - existingMessages.length;
+            const currentChunkMessages = [...existingMessages, ...formattedPendingMessages.slice(0, splitPoint)];
+            const newChunkMessages = formattedPendingMessages.slice(splitPoint);
 
-            const allMessages = [...existingMessages, ...pendingMessages];
+            const currentChunkData = {
+                id: currentChunkId,
+                messages: currentChunkMessages,
+                hasMore: parseInt(currentChunkId.split('_')[1]) > 1,
+                isDirty: true
+            };
 
-            if (allMessages.length > this.maxBatchSize) {
-                const splitPoint = this.maxBatchSize - existingMessages.length;
-                const currentChunkMessages = [...existingMessages, ...pendingMessages.slice(0, splitPoint)];
-                const nextChunkMessages = pendingMessages.slice(splitPoint);
+            await this.cacheChunk(roomId, currentChunkId, currentChunkData);
+            await this.markChunkDirty(roomId, currentChunkId);
 
-                batch.set(chunkRef, {
-                    messages: currentChunkMessages,
-                    createdAt: existingChunk.exists ? existingChunk.data().createdAt : new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    messageCount: currentChunkMessages.length
-                });
+            const newChunkData = {
+                id: newChunkId,
+                messages: newChunkMessages,
+                hasMore: true,
+                isDirty: true
+            };
 
-                if (nextChunkMessages.length > 0) {
-                    const nextChunkNumber = parseInt(newChunkId.split('_')[1]) + 1;
-                    const nextChunkId = `chunk_${nextChunkNumber}`;
-                    const nextChunkRef = this.db.collection('rooms').doc(roomId).collection('messageChunks').doc(nextChunkId);
+            await this.cacheChunk(roomId, newChunkId, newChunkData);
+            await this.markChunkDirty(roomId, newChunkId);
+            await redis.setEx(`latest_chunk:${roomId}`, 300, newChunkId);
+        } else {
+            const chunkData = {
+                id: currentChunkId,
+                messages: allMessages,
+                hasMore: parseInt(currentChunkId.split('_')[1]) > 1,
+                isDirty: true
+            };
 
-                    batch.set(nextChunkRef, {
-                        messages: nextChunkMessages,
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString(),
-                        messageCount: nextChunkMessages.length
-                    });
-
-                    await redis.set(`current_chunk:${roomId}`, nextChunkId);
-                    await redis.set(`chunk_size:${roomId}:${nextChunkId}`, nextChunkMessages.length);
-                }
-
-                await redis.set(`chunk_size:${roomId}:${newChunkId}`, currentChunkMessages.length);
-            } else {
-                batch.set(chunkRef, {
-                    messages: allMessages,
-                    createdAt: existingChunk.exists ? existingChunk.data().createdAt : new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    messageCount: allMessages.length
-                });
-
-                await redis.set(`chunk_size:${roomId}:${newChunkId}`, allMessages.length);
-            }
-
-            await batch.commit();
-
-            await this.updateRoomMetadata(roomId, pendingMessages[pendingMessages.length - 1]);
-
-        } catch (error) {
-            console.error('Batch write error:', error);
-            for (const msg of pendingMessages) {
-                await redis.lPush(key, JSON.stringify(msg));
-            }
+            await this.cacheChunk(roomId, currentChunkId, chunkData);
+            await this.markChunkDirty(roomId, currentChunkId);
         }
     }
 
     async updateRoomMetadata(roomId, lastMessage) {
         const roomRef = this.db.collection('rooms').doc(roomId);
-        await roomRef.update({
+        const metadata = {
             lastMessage: {
                 content: lastMessage.c,
                 sender: lastMessage.s,
@@ -256,85 +339,30 @@ class MessageBatchService {
             lastMessageTimestamp: lastMessage.t,
             lastMessageId: lastMessage.i,
             updatedAt: new Date().toISOString()
-        });
+        };
+
+        await roomRef.set(metadata, { merge: true });
+        await this.cacheRoomMetadata(roomId, metadata);
     }
 
     async markMessagesAsRead(roomId, userId, lastReadMessageId) {
         const roomRef = this.db.collection('rooms').doc(roomId);
-        await roomRef.update({
+        const readData = {
             [`lastReadMessageId_${userId}`]: lastReadMessageId,
             [`lastReadTimestamp_${userId}`]: Date.now()
-        });
-    }
+        };
 
-    async getLatestChunk(roomId) {
-        const currentChunkId = await this.getCurrentChunkId(roomId);
-        const chunkRef = this.db.collection('rooms').doc(roomId).collection('messageChunks').doc(currentChunkId);
-        const chunkDoc = await chunkRef.get();
-
-        if (chunkDoc.exists) {
-            return {
-                id: currentChunkId,
-                messages: this.formatMessages(chunkDoc.data().messages || []),
-                hasMore: await this.hasOlderChunks(roomId, currentChunkId)
-            };
+        await roomRef.update(readData);
+        
+        const cachedMetadata = await this.getCachedRoomMetadata(roomId);
+        if (cachedMetadata) {
+            Object.assign(cachedMetadata, readData);
+            await this.cacheRoomMetadata(roomId, cachedMetadata);
         }
-
-        return { id: currentChunkId, messages: [], hasMore: false };
-    }
-
-    async getChunk(roomId, chunkId) {
-        const chunkRef = this.db.collection('rooms').doc(roomId).collection('messageChunks').doc(chunkId);
-        const chunkDoc = await chunkRef.get();
-
-        if (chunkDoc.exists) {
-            return {
-                id: chunkId,
-                messages: this.formatMessages(chunkDoc.data().messages || []),
-                hasMore: await this.hasOlderChunks(roomId, chunkId)
-            };
-        }
-
-        return null;
-    }
-
-    async getOlderChunk(roomId, currentChunkId) {
-        const currentChunkNumber = parseInt(currentChunkId.split('_')[1]);
-        const olderChunkNumber = currentChunkNumber - 1;
-
-        if (olderChunkNumber < 1) return null;
-
-        const olderChunkId = `chunk_${olderChunkNumber}`;
-        return await this.getChunk(roomId, olderChunkId);
-    }
-
-    async hasOlderChunks(roomId, chunkId) {
-        const chunkNumber = parseInt(chunkId.split('_')[1]);
-        return chunkNumber > 1;
     }
 
     async getMessagesFromRedis(roomId) {
-        const redis = await connectRedis();
-        const key = `pending_messages:${roomId}`;
-        const messages = await redis.lRange(key, 0, -1);
-        return this.formatMessages(messages.map(msg => JSON.parse(msg))).reverse();
-    }
-
-    formatMessages(messages) {
-        return messages.map(msg => ({
-            id: msg.i || msg.id,
-            sender: msg.s || msg.sender,
-            content: msg.c || msg.content,
-            time: new Date(msg.t || msg.timestamp || msg.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            timestamp: msg.t || msg.timestamp || msg.time,
-            type: msg.ty || msg.type || 'text',
-            fileName: msg.fn || msg.fileName,
-            fileSize: msg.fs || msg.fileSize,
-            fileType: msg.ft || msg.fileType,
-            fileUrl: msg.fu || msg.fileUrl,
-            replyTo: msg.r || msg.replyTo,
-            em: msg.em
-        }));
+        return await this.getPendingMessages(roomId);
     }
 }
 

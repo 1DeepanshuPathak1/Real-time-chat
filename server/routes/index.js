@@ -21,5 +21,8 @@ module.exports = (healthController, roomController, friendRequestController, aut
     router.post('/api/messages/mark-read', messageController.markMessagesRead.bind(messageController));
     router.post('/api/messages/react', messageController.addReaction.bind(messageController));
 
+    router.get('/api/contacts/:userId', messageController.getContactList.bind(messageController));
+    router.get('/api/user/status/:userId', messageController.getUserStatus.bind(messageController));
+
     return router;
 };

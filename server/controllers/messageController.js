@@ -49,15 +49,23 @@ class MessageController {
                 return res.status(400).json({ error: 'Room ID is required' });
             }
 
-            const latestChunk = await this.batchService.getLatestChunk(roomId);
-            const pendingMessages = await this.batchService.getMessagesFromRedis(roomId);
+            const chunks = await this.batchService.getChunksFromCache(roomId, 2);
+            
+            if (chunks.length === 0) {
+                return res.status(200).json({
+                    id: 'chunk_1',
+                    messages: [],
+                    hasMore: false
+                });
+            }
 
-            const allMessages = [...latestChunk.messages, ...pendingMessages];
+            const latestChunk = chunks[chunks.length - 1];
+            const allMessages = chunks.flatMap(chunk => chunk.messages);
 
             res.status(200).json({
                 id: latestChunk.id,
                 messages: allMessages,
-                hasMore: latestChunk.hasMore
+                hasMore: chunks.length > 1 || chunks[0].hasMore
             });
         } catch (error) {
             console.error('Error fetching latest messages:', error);
@@ -73,17 +81,13 @@ class MessageController {
                 return res.status(400).json({ error: 'Room ID and Chunk ID are required' });
             }
 
-            const olderChunk = await this.batchService.getOlderChunk(roomId, chunkId);
+            const result = await this.batchService.getOlderMessages(roomId, chunkId);
 
-            if (!olderChunk) {
-                return res.status(200).json({
-                    id: null,
-                    messages: [],
-                    hasMore: false
-                });
-            }
-
-            res.status(200).json(olderChunk);
+            res.status(200).json({
+                id: result.chunkId,
+                messages: result.messages,
+                hasMore: result.hasMore
+            });
         } catch (error) {
             console.error('Error fetching older messages:', error);
             res.status(500).json({ error: 'Failed to fetch older messages' });
@@ -131,21 +135,28 @@ class MessageController {
 
     async getUnreadCount(req, res) {
         const { roomId } = req.params;
-        const { lastRead } = req.query;
+        const { userId, lastRead } = req.query;
 
         try {
-            if (!roomId) {
-                return res.status(400).json({ error: 'Room ID is required' });
+            if (!roomId || !userId) {
+                return res.status(400).json({ error: 'Room ID and User ID are required' });
+            }
+
+            const cachedCount = await this.batchService.getCachedUnreadCount(roomId, userId);
+            if (cachedCount !== null) {
+                return res.status(200).json({ count: cachedCount });
             }
 
             const lastReadTimestamp = parseInt(lastRead) || 0;
-            const latestChunk = await this.batchService.getLatestChunk(roomId);
-            const pendingMessages = await this.batchService.getMessagesFromRedis(roomId);
-
-            const allMessages = [...latestChunk.messages, ...pendingMessages];
-            const unreadCount = allMessages.filter(msg =>
-                (msg.t || new Date(msg.time).getTime()) > lastReadTimestamp
+            const chunks = await this.batchService.getChunksFromCache(roomId, 3);
+            const allMessages = chunks.flatMap(chunk => chunk.messages);
+            
+            const unreadCount = allMessages.filter(msg => 
+                msg.sender !== userId && 
+                (msg.timestamp > lastReadTimestamp)
             ).length;
+
+            await this.batchService.cacheUnreadCount(roomId, userId, unreadCount);
 
             res.status(200).json({ count: unreadCount });
         } catch (error) {
@@ -163,12 +174,124 @@ class MessageController {
             }
 
             await this.batchService.markMessagesAsRead(roomId, userId, lastReadMessageId);
+            await this.batchService.cacheUnreadCount(roomId, userId, 0);
 
             res.status(200).json({ success: true });
         } catch (error) {
             console.error('Error marking messages as read:', error);
             res.status(500).json({ error: 'Failed to mark messages as read' });
         }
+    }
+
+    async getContactList(req, res) {
+        const { userId } = req.params;
+
+        try {
+            if (!userId) {
+                return res.status(400).json({ error: 'User ID is required' });
+            }
+
+            const cachedContacts = await this.batchService.getCachedContactList(userId);
+            if (cachedContacts) {
+                return res.status(200).json({ contacts: cachedContacts });
+            }
+
+            const contactsRef = this.db.collection('users').doc(userId).collection('contacts');
+            const snapshot = await contactsRef.get();
+            
+            const contacts = await Promise.all(
+                snapshot.docs.map(async (doc) => {
+                    const contactData = { id: doc.id, ...doc.data() };
+                    
+                    const cachedMetadata = await this.batchService.getCachedRoomMetadata(contactData.roomID);
+                    if (cachedMetadata) {
+                        const lastReadTimestamp = cachedMetadata[`lastReadTimestamp_${userId}`] || 0;
+                        const unreadCount = await this.batchService.getCachedUnreadCount(contactData.roomID, userId) || 0;
+                        
+                        return {
+                            ...contactData,
+                            unreadCount,
+                            lastMessageTime: cachedMetadata.lastMessageTimestamp || 0
+                        };
+                    }
+
+                    const roomRef = this.db.collection('rooms').doc(contactData.roomID);
+                    const roomDoc = await roomRef.get();
+                    const roomData = roomDoc.data() || {};
+                    
+                    const lastMessageTimestamp = roomData.lastMessageTimestamp || 0;
+                    const lastReadTimestamp = roomData[`lastReadTimestamp_${userId}`] || 0;
+                    const unreadCount = Math.max(0, Math.floor((lastMessageTimestamp - lastReadTimestamp) / 1000));
+
+                    await this.batchService.cacheRoomMetadata(contactData.roomID, roomData);
+                    await this.batchService.cacheUnreadCount(contactData.roomID, userId, unreadCount);
+
+                    return {
+                        ...contactData,
+                        unreadCount,
+                        lastMessageTime: lastMessageTimestamp
+                    };
+                })
+            );
+
+            const sortedContacts = contacts.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
+            await this.batchService.cacheContactList(userId, sortedContacts);
+
+            res.status(200).json({ contacts: sortedContacts });
+        } catch (error) {
+            console.error('Error fetching contact list:', error);
+            res.status(500).json({ error: 'Failed to fetch contact list' });
+        }
+    }
+
+    async getUserStatus(req, res) {
+        const { userId } = req.params;
+
+        try {
+            if (!userId) {
+                return res.status(400).json({ error: 'User ID is required' });
+            }
+
+            const cachedStatus = await this.batchService.getCachedUserStatus(userId);
+            if (cachedStatus) {
+                return res.status(200).json(cachedStatus);
+            }
+
+            const userRef = this.db.collection('users').doc(userId);
+            const userDoc = await userRef.get();
+            
+            if (!userDoc.exists) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+
+            const userData = userDoc.data();
+            const status = {
+                isOnline: userData.isOnline || false,
+                lastSeen: userData.lastSeenTimestamp ? 
+                    this.formatLastSeen(userData.lastSeenTimestamp) : 'recently'
+            };
+
+            await this.batchService.cacheUserStatus(userId, status);
+
+            res.status(200).json(status);
+        } catch (error) {
+            console.error('Error fetching user status:', error);
+            res.status(500).json({ error: 'Failed to fetch user status' });
+        }
+    }
+
+    formatLastSeen(timestamp) {
+        const now = Date.now();
+        const diff = now - timestamp;
+        const minutes = Math.floor(diff / 60000);
+        const hours = Math.floor(diff / 3600000);
+        const days = Math.floor(diff / 86400000);
+
+        if (minutes < 1) return 'just now';
+        if (minutes < 60) return `${minutes}m ago`;
+        if (hours < 24) return `${hours}h ago`;
+        if (days < 7) return `${days}d ago`;
+        return 'long time ago';
     }
 }
 
