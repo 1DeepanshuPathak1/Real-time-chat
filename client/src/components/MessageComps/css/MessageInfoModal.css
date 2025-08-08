@@ -4,127 +4,243 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 2000;
-  animation: overlayFadeIn 0.2s ease-out;
+  animation: overlayFadeIn 0.25s ease-out;
 }
 
 .message-info-modal {
   background: var(--secondary-bg);
   border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border-radius: 16px;
   width: 90%;
-  max-width: 400px;
-  max-height: 80vh;
+  max-width: 450px;
+  max-height: 85vh;
   overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  animation: modalSlideIn 0.3s ease-out;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+  animation: modalSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  scrollbar-width: none;
+}
+
+.message-info-modal::-webkit-scrollbar {
+  display: none;
 }
 
 .modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: 20px 24px;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-color);
 }
 
 .modal-header h3 {
   color: var(--text-color);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
   margin: 0;
+  letter-spacing: -0.02em;
 }
 
 .close-button {
   background: none;
   border: none;
   color: var(--text-color);
-  font-size: 20px;
+  font-size: 22px;
   cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
+  padding: 8px;
+  border-radius: 8px;
   transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
 }
 
 .close-button:hover {
   background: var(--accent-color);
   color: #ffffff;
+  opacity: 1;
+  transform: scale(1.05);
 }
 
 .modal-content {
-  padding: 20px;
+  padding: 24px;
   overflow-y: auto;
-  max-height: calc(80vh - 80px);
+  max-height: calc(85vh - 88px);
+  scrollbar-width: none;
 }
 
-.message-preview {
+.modal-content::-webkit-scrollbar {
+  display: none;
+}
+
+.text-preview {
+  color: var(--text-color);
+  font-size: 15px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 16px;
   background: var(--message-bg-received);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 20px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  word-break: break-word;
 }
 
-.message-preview p {
+.document-preview {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  background: var(--message-bg-received);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+.doc-icon {
+  color: var(--accent-color);
+  font-size: 28px;
+  flex-shrink: 0;
+  align-self: center;
+  height: 100%;
+}
+
+.doc-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  width: 100%;
+  padding-right: 8px;
+}
+
+.doc-name {
   color: var(--text-color);
-  font-size: 14px;
-  line-height: 1.4;
-  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   word-break: break-word;
+  line-height: 1.4;
+  width: 100%;
+}
+
+.document-size {
+  color: var(--text-color);
+  font-size: 13px;
+  opacity: 0.7;
+  font-weight: 400;
+}
+
+.image-preview-container {
+  background: var(--message-bg-received);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+
+.image-thumbnail {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: var(--secondary-bg);
+  padding: 16px;
+  overflow: hidden;
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 6px;
+  object-fit: contain;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+}
+
+.image-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: var(--message-bg-received);
+}
+
+.image-name {
+  color: var(--text-color);
+  font-size: 15px;
+  font-weight: 500;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  word-break: break-word;
+  hyphens: auto;
+  line-height: 1.4;
+}
+
+.image-size {
+  color: var(--text-color);
+  font-size: 13px;
+  opacity: 0.7;
+  font-weight: 400;
 }
 
 .message-details {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .detail-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  min-height: 20px;
 }
 
 .detail-row:last-child {
   border-bottom: none;
+  padding-bottom: 0;
 }
 
 .detail-label {
   color: var(--text-color);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
-  opacity: 0.7;
-  min-width: 80px;
+  opacity: 0.8;
+  min-width: 90px;
+  letter-spacing: -0.01em;
 }
 
 .detail-value {
   color: var(--text-color);
-  font-size: 13px;
+  font-size: 14px;
   text-align: right;
   word-break: break-word;
-  max-width: 200px;
+  max-width: 240px;
+  font-weight: 400;
 }
 
 .status-container {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .status-icon {
-  font-size: 14px;
+  font-size: 16px;
+  flex-shrink: 0;
 }
 
 .status-icon.sent {
-  color: #64748b;
+  color: #94a3b8;
 }
 
 .status-icon.delivered {
@@ -147,7 +263,7 @@
 @keyframes modalSlideIn {
   0% {
     opacity: 0;
-    transform: scale(0.9) translateY(-20px);
+    transform: scale(0.85) translateY(-30px);
   }
   100% {
     opacity: 1;
@@ -158,21 +274,73 @@
 @media (max-width: 768px) {
   .message-info-modal {
     width: 95%;
+    max-width: 380px;
     margin: 20px;
   }
   
+  .modal-header {
+    padding: 18px 20px;
+  }
+  
+  .modal-header h3 {
+    font-size: 18px;
+  }
+  
   .modal-content {
-    padding: 16px;
+    padding: 20px;
   }
   
   .detail-row {
     flex-direction: column;
     align-items: flex-start;
-    gap: 4px;
+    gap: 6px;
+    padding: 10px 0;
+  }
+  
+  .detail-label {
+    min-width: auto;
+    font-size: 13px;
   }
   
   .detail-value {
     text-align: left;
     max-width: 100%;
+    font-size: 13px;
+  }
+  
+  .status-container {
+    align-self: flex-start;
+  }
+  
+  .preview-image {
+    max-height: 150px;
+  }
+  
+  .image-details {
+    text-align: left;
+  }
+}
+
+@media (max-width: 480px) {
+  .message-info-modal {
+    width: 100%;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+    margin: 0;
+  }
+  
+  .modal-header {
+    padding: 16px 20px;
+  }
+  
+  .modal-content {
+    padding: 16px 20px;
+    max-height: calc(100vh - 72px);
+  }
+  
+  .message-preview {
+    margin-bottom: 20px;
+    padding: 14px;
   }
 }

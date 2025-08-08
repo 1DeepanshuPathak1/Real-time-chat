@@ -57,7 +57,8 @@ class SocketController {
             });
 
             socket.on('send-message', async (data) => {
-                const { roomID, message, sender, messageId, type, replyTo, fileName, fileSize, originalSize, fileType } = data;
+                const { roomID, message, sender, messageId, type, replyTo, fileName, fileSize, originalSize, fileType, timestamp } = data;
+                
                 try {
                     let processedContent = message;
                     
@@ -71,12 +72,12 @@ class SocketController {
                         }
                     }
 
-                    this.io.to(roomID).emit('received-message', {
+                    socket.to(roomID).emit('received-message', {
                         roomID,
                         sender,
                         message: processedContent,
                         messageId,
-                        timestamp: data.timestamp,
+                        timestamp: timestamp || Date.now(),
                         type: type || 'text',
                         fileName: fileName,
                         fileSize: fileSize,

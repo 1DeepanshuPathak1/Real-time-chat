@@ -1,4 +1,4 @@
-import { FiX, FiCheck, FiCheckCircle, FiClock } from 'react-icons/fi';
+import { FiX, FiCheck, FiCheckCircle, FiClock, FiFile } from 'react-icons/fi';
 import './css/MessageInfoModal.css';
 
 export const MessageInfoModal = ({ show, message, onClose, currentUser }) => {
@@ -26,6 +26,42 @@ export const MessageInfoModal = ({ show, message, onClose, currentUser }) => {
     return 'Sent';
   };
 
+  const getMessagePreview = () => {
+    if (message.type === 'document') {
+      return (
+        <div className="document-preview">
+          <FiFile className="doc-icon" />
+          <div className="doc-info">
+            <span className="doc-name">{message.fileName}</span>
+            <span className="document-size">
+              {message.fileSize ? `${(message.fileSize / 1024).toFixed(1)}KB` : 
+               message.originalSize ? `${(message.originalSize / 1024).toFixed(1)}KB` : 'Unknown size'}
+            </span>
+          </div>
+        </div>
+      );
+    } else if (message.type === 'image') {
+      return (
+        <div className="image-preview-container">
+          <div className="image-thumbnail">
+            <img src={message.content} alt="Shared" className="preview-image" />
+          </div>
+          <div className="image-details">
+            <span className="image-name">{message.fileName || 'Image'}</span>
+            {(message.fileSize || message.originalSize) && (
+              <span className="image-size">
+                {message.fileSize ? `${(message.fileSize / 1024).toFixed(1)}KB` : 
+                 message.originalSize ? `${(message.originalSize / 1024).toFixed(1)}KB` : ''}
+              </span>
+            )}
+          </div>
+        </div>
+      );
+    } else {
+      return <p className="text-preview">{message.content}</p>;
+    }
+  };
+
   return (
     <div className="message-info-overlay" onClick={onClose}>
       <div className="message-info-modal" onClick={(e) => e.stopPropagation()}>
@@ -37,9 +73,7 @@ export const MessageInfoModal = ({ show, message, onClose, currentUser }) => {
         </div>
         
         <div className="modal-content">
-          <div className="message-preview">
-            <p>{message.content}</p>
-          </div>
+          {getMessagePreview()}
           
           <div className="message-details">
             <div className="detail-row">
@@ -89,6 +123,16 @@ export const MessageInfoModal = ({ show, message, onClose, currentUser }) => {
               <div className="detail-row">
                 <span className="detail-label">File:</span>
                 <span className="detail-value">{message.fileName}</span>
+              </div>
+            )}
+
+            {(message.fileSize || message.originalSize) && (
+              <div className="detail-row">
+                <span className="detail-label">Size:</span>
+                <span className="detail-value">
+                  {message.fileSize ? `${(message.fileSize / 1024).toFixed(1)}KB` : 
+                   message.originalSize ? `${(message.originalSize / 1024).toFixed(1)}KB` : 'Unknown'}
+                </span>
               </div>
             )}
           </div>

@@ -21,7 +21,7 @@ export const SocketProvider = ({ children, user }) => {
     if (user && !socketRef.current) {
       console.log('Initializing socket connection for user:', user.uid);
       
-      const newSocket = io('https://chat-app-server-uwpx.onrender.com', {
+      const newSocket = io('https://potential-couscous-gvqx4q97w55fvx5w-3001.app.github.dev', {
         transports: ['websocket'],
         path: '/socket.io',
         reconnectionAttempts: 5,

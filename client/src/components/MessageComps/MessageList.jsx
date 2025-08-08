@@ -207,21 +207,43 @@ export const MessageList = ({ messages, messagesEndRef, currentUserEmail, select
   useEffect(() => {
     if (socket) {
       const handleReceivedMessage = (data) => {
-        if (data.roomID === selectedContact?.roomID && data.type === 'document') {
-          setMessages(prevMessages => 
-            prevMessages.map(msg => 
-              msg.id === data.messageId 
-                ? { 
-                    ...msg, 
-                    content: data.message,
-                    fileName: data.fileName,
-                    fileSize: data.fileSize,
-                    fileType: data.fileType,
-                    originalSize: data.originalSize
-                  }
-                : msg
-            )
-          );
+        if (data.roomID === selectedContact?.roomID) {
+          setMessages(prevMessages => {
+            const existingMessageIndex = prevMessages.findIndex(msg => msg.id === data.messageId);
+            
+            if (existingMessageIndex !== -1) {
+              return prevMessages.map((msg, index) => 
+                index === existingMessageIndex 
+                  ? { 
+                      ...msg, 
+                      content: data.message,
+                      fileName: data.fileName || msg.fileName,
+                      fileSize: data.fileSize || msg.fileSize,
+                      fileType: data.fileType || msg.fileType,
+                      originalSize: data.originalSize || msg.originalSize
+                    }
+                  : msg
+              );
+            }
+
+            const newMessage = {
+              id: data.messageId,
+              sender: data.sender,
+              content: data.message,
+              time: new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              timestamp: data.timestamp,
+              type: data.type || 'text',
+              fileName: data.fileName,
+              fileSize: data.fileSize,
+              fileType: data.fileType,
+              originalSize: data.originalSize,
+              isDelivered: true,
+              isRead: false,
+              ...(data.replyTo && { replyTo: data.replyTo })
+            };
+
+            return [...prevMessages, newMessage];
+          });
         }
       };
 
@@ -447,6 +469,7 @@ export const MessageList = ({ messages, messagesEndRef, currentUserEmail, select
         </div>
       );
     } else if (message.type === 'document') {
+      const displaySize = message.fileSize || message.originalSize;
       return (
         <div className="document-message">
           <div className="document-info">
@@ -454,8 +477,7 @@ export const MessageList = ({ messages, messagesEndRef, currentUserEmail, select
             <div className="document-details">
               <span className="document-name">{message.fileName || 'Document'}</span>
               <span className="document-size">
-                {message.fileSize ? `${Math.round(message.fileSize / 1024)}KB` : 
-                 message.originalSize ? `${Math.round(message.originalSize / 1024)}KB` : 'Unknown size'}
+                {displaySize ? `${(displaySize / 1024).toFixed(1)}KB` : 'Unknown size'}
               </span>
             </div>
           </div>
@@ -509,7 +531,7 @@ export const MessageList = ({ messages, messagesEndRef, currentUserEmail, select
             </div>
           )}
           <div
-            className={`message ${message.sender === currentUserEmail ? 'sent' : 'received'}`}
+            className={`message ${message.sender === currentUserEmail ? 'sent' : 'received'} ${message.isSending ? 'sending' : ''} ${message.hasError ? 'error' : ''}`}
             data-message-id={message.id}
           >
             <div 

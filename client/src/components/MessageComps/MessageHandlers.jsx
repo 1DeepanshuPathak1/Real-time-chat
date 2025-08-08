@@ -53,6 +53,24 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
     const messageContent = inputMessage.trim();
     setInputMessage('');
 
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    const timestamp = Date.now();
+    
+    const newMessage = {
+      id: tempId,
+      sender: user.email,
+      content: messageContent,
+      time: new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: timestamp,
+      type: 'text',
+      isDelivered: false,
+      isRead: false,
+      isSending: true,
+      ...(replyTo && { replyTo: replyTo.id })
+    };
+
+    setMessages(prevMessages => [...prevMessages, newMessage]);
+
     try {
       const messageData = {
         sender: user.email,
@@ -61,27 +79,23 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
         ...(replyTo && { replyTo: replyTo.id })
       };
 
-      const messageId = await chunkedMessageService.sendMessage(selectedContact.roomID, messageData);
+      const actualMessageId = await chunkedMessageService.sendMessage(selectedContact.roomID, messageData);
 
-      const newMessage = {
-        id: messageId,
-        sender: user.email,
-        content: messageContent,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        timestamp: Date.now(),
-        type: 'text',
-        ...(replyTo && { replyTo: replyTo.id })
-      };
-
-      setMessages(prevMessages => [...prevMessages, newMessage]);
+      setMessages(prevMessages => 
+        prevMessages.map(msg => 
+          msg.id === tempId 
+            ? { ...msg, id: actualMessageId, isSending: false, isDelivered: true }
+            : msg
+        )
+      );
 
       if (socket) {
         socket.emit('send-message', {
           roomID: selectedContact.roomID,
           message: messageContent,
           sender: user.email,
-          messageId: messageId,
-          timestamp: newMessage.timestamp,
+          messageId: actualMessageId,
+          timestamp: timestamp,
           type: 'text',
           ...(replyTo && { replyTo: replyTo.id })
         });
@@ -89,6 +103,13 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
 
     } catch (error) {
       console.error('Error sending message:', error);
+      setMessages(prevMessages => 
+        prevMessages.map(msg => 
+          msg.id === tempId 
+            ? { ...msg, isSending: false, isDelivered: false, hasError: true }
+            : msg
+        )
+      );
       setInputMessage(messageContent);
     } finally {
       setIsSending(false);
@@ -105,6 +126,9 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
 
     setIsSending(true);
 
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    const timestamp = Date.now();
+
     try {
       let processedContent;
       let originalSize = file.size;
@@ -118,6 +142,24 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
         finalSize = originalSize;
       }
 
+      const tempMessage = {
+        id: tempId,
+        sender: user.email,
+        content: processedContent,
+        time: new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: timestamp,
+        type: type,
+        fileName: file.name,
+        fileSize: finalSize,
+        fileType: file.type,
+        originalSize: originalSize,
+        isDelivered: false,
+        isRead: false,
+        isSending: true
+      };
+
+      setMessages(prevMessages => [...prevMessages, tempMessage]);
+
       const messageData = {
         sender: user.email,
         content: processedContent,
@@ -128,34 +170,25 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
         originalSize: originalSize
       };
 
-      const messageId = await chunkedMessageService.sendMessage(selectedContact.roomID, messageData);
+      const actualMessageId = await chunkedMessageService.sendMessage(selectedContact.roomID, messageData);
 
-      const newMessage = {
-        id: messageId,
-        sender: user.email,
-        content: processedContent,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        timestamp: Date.now(),
-        type: type,
-        fileName: file.name,
-        fileSize: finalSize,
-        fileType: file.type,
-        originalSize: originalSize,
-        isDelivered: false,
-        isRead: false
-      };
-
-      setMessages(prevMessages => [...prevMessages, newMessage]);
+      setMessages(prevMessages => 
+        prevMessages.map(msg => 
+          msg.id === tempId 
+            ? { ...msg, id: actualMessageId, isSending: false, isDelivered: true }
+            : msg
+        )
+      );
 
       if (socket) {
         socket.emit('send-message', {
           roomID: selectedContact.roomID,
           message: processedContent,
           sender: user.email,
-          messageId: messageId,
+          messageId: actualMessageId,
           type: type,
           fileName: file.name,
-          timestamp: newMessage.timestamp,
+          timestamp: timestamp,
           fileSize: finalSize,
           originalSize: originalSize,
           fileType: file.type
@@ -164,6 +197,13 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
 
     } catch (error) {
       console.error('Error uploading file:', error);
+      setMessages(prevMessages => 
+        prevMessages.map(msg => 
+          msg.id === tempId 
+            ? { ...msg, isSending: false, isDelivered: false, hasError: true }
+            : msg
+        )
+      );
     } finally {
       setIsSending(false);
     }
