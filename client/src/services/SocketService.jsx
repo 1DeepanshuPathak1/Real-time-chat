@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import io from 'socket.io-client';
+import { API_BASE_URL } from '../config/api';
 
 const SocketContext = createContext();
 
@@ -20,8 +21,8 @@ export const SocketProvider = ({ children, user }) => {
   useEffect(() => {
     if (user && !socketRef.current) {
       console.log('Initializing socket connection for user:', user.uid);
-      
-      const newSocket = io('https://potential-couscous-gvqx4q97w55fvx5w-3001.app.github.dev', {
+
+      const newSocket = io(API_BASE_URL, {
         transports: ['websocket'],
         path: '/socket.io',
         reconnectionAttempts: 5,
