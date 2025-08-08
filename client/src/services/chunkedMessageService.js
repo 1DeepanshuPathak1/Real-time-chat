@@ -262,7 +262,6 @@ class ChunkedMessageService {
             const timestamp = msg.t || msg.timestamp || msg.time || Date.now();
             let content = msg.c || msg.content;
 
-            
             return {
                 id: msg.i || msg.id,
                 sender: msg.s || msg.sender,

@@ -57,20 +57,16 @@ class SocketController {
             });
 
             socket.on('send-message', async (data) => {
-                const { roomID, message, sender, messageId, type, replyTo, fileName, fileSize, originalSize } = data;
+                const { roomID, message, sender, messageId, type, replyTo, fileName, fileSize, originalSize, fileType } = data;
                 try {
                     let processedContent = message;
                     
-                    if (type === 'image' || type === 'document') {
+                    if (type === 'document') {
                         const chunks = await this.batchService.getChunksFromCache(roomID, 1);
                         if (chunks.length > 0) {
                             const foundMessage = chunks[0].messages.find(msg => msg.id === messageId);
                             if (foundMessage && foundMessage.content) {
-                                if (type === 'document' && !foundMessage.content.startsWith('data:')) {
-                                    processedContent = this.decompressLZW(foundMessage.content);
-                                } else {
-                                    processedContent = foundMessage.content;
-                                }
+                                processedContent = foundMessage.content;
                             }
                         }
                     }
@@ -85,6 +81,7 @@ class SocketController {
                         fileName: fileName,
                         fileSize: fileSize,
                         originalSize: originalSize,
+                        fileType: fileType,
                         ...(replyTo && { replyTo })
                     });
 

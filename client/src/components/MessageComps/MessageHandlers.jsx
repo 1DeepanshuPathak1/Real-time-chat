@@ -133,7 +133,7 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
       const newMessage = {
         id: messageId,
         sender: user.email,
-        content: type === 'image' ? processedContent : URL.createObjectURL(file),
+        content: processedContent,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         timestamp: Date.now(),
         type: type,
@@ -157,7 +157,8 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
           fileName: file.name,
           timestamp: newMessage.timestamp,
           fileSize: finalSize,
-          originalSize: originalSize
+          originalSize: originalSize,
+          fileType: file.type
         });
       }
 

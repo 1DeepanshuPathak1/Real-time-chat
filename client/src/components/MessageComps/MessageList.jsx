@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FiFile, FiDownload, FiEye, FiX } from 'react-icons/fi';
 import { MessageStatusIndicator } from './MessageStatus';
 import { MessageContextMenu } from './MessageContextMenu';
@@ -12,13 +12,14 @@ import './css/MessageList.css'
 
 const db = getFirestore();
 
-export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, currentUserEmail, selectedContact, user, firstUnreadIndex, showStartMessage, isDark, onReply, contacts }) => {
+export const MessageList = ({ messages, messagesEndRef, currentUserEmail, selectedContact, user, firstUnreadIndex, showStartMessage, isDark, onReply, contacts }) => {
   const { socket } = useSocket();
   const lastReadMessageId = useRef(null);
   const hasScrolledToUnread = useRef(false);
   const [contextMenu, setContextMenu] = useState({ show: false, position: { x: 0, y: 0 }, message: null });
   const [showMessageInfo, setShowMessageInfo] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState(null);
+  const [showMessages, setMessages] = useState(messages || []);
   const [copiedMessageId, setCopiedMessageId] = useState(null);
   const [messageReactions, setMessageReactions] = useState({});
   const [imagePreview, setImagePreview] = useState({ show: false, src: '', fileName: '' });
@@ -26,17 +27,18 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
   const downloadDocument = async (message) => {
     try {
       let downloadData;
+      let fileName = message.fileName || 'document';
       
       if (message.content.startsWith('data:')) {
         downloadData = message.content;
       } else {
-        const blob = new Blob([message.content], { type: message.fileType });
+        const blob = new Blob([message.content], { type: message.fileType || 'application/octet-stream' });
         downloadData = URL.createObjectURL(blob);
       }
       
       const link = document.createElement('a');
       link.href = downloadData;
-      link.download = message.fileName;
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -204,6 +206,25 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
 
   useEffect(() => {
     if (socket) {
+      const handleReceivedMessage = (data) => {
+        if (data.roomID === selectedContact?.roomID && data.type === 'document') {
+          setMessages(prevMessages => 
+            prevMessages.map(msg => 
+              msg.id === data.messageId 
+                ? { 
+                    ...msg, 
+                    content: data.message,
+                    fileName: data.fileName,
+                    fileSize: data.fileSize,
+                    fileType: data.fileType,
+                    originalSize: data.originalSize
+                  }
+                : msg
+            )
+          );
+        }
+      };
+
       const handleReactionUpdate = (data) => {
         if (data.roomId === selectedContact?.roomID) {
           setMessageReactions(prev => ({
@@ -213,10 +234,15 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
         }
       };
 
+      socket.on('received-message', handleReceivedMessage);
       socket.on('reaction-updated', handleReactionUpdate);
-      return () => socket.off('reaction-updated', handleReactionUpdate);
+      
+      return () => {
+        socket.off('received-message', handleReceivedMessage);
+        socket.off('reaction-updated', handleReactionUpdate);
+      };
     }
-  }, [socket, selectedContact]);
+  }, [socket, selectedContact, setMessages]);
 
   const handleContextMenu = (e, message) => {
     e.preventDefault();
@@ -426,9 +452,10 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
           <div className="document-info">
             <FiFile className="document-icon" />
             <div className="document-details">
-              <span className="document-name">{message.fileName || message.content}</span>
+              <span className="document-name">{message.fileName || 'Document'}</span>
               <span className="document-size">
-                {message.fileSize ? `${Math.round(message.fileSize / 1024)}KB` : 'Unknown size'}
+                {message.fileSize ? `${Math.round(message.fileSize / 1024)}KB` : 
+                 message.originalSize ? `${Math.round(message.originalSize / 1024)}KB` : 'Unknown size'}
               </span>
             </div>
           </div>
