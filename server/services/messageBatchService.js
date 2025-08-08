@@ -8,37 +8,40 @@ class MessageBatchService extends EnhancedCacheService {
         this.startBatchProcessor();
     }
 
-    async addMessageToBatch(roomId, messageData) {
-        const redis = await connectRedis();
-        const messageId = `${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-
-        const messageWithId = {
-            i: messageId,
-            s: messageData.sender,
-            c: messageData.content,
-            t: Date.now(),
-            ty: messageData.type || 'text',
-            ...(messageData.fileName && { fn: messageData.fileName }),
-            ...(messageData.fileSize && { fs: messageData.fileSize }),
-            ...(messageData.fileType && { ft: messageData.fileType }),
-            ...(messageData.originalSize && { os: messageData.originalSize }),
-            ...(messageData.compressedSize && { cs: messageData.compressedSize }),
-            ...(messageData.replyTo && { r: messageData.replyTo })
-        };
-
-        const key = `pending_messages:${roomId}`;
-        await redis.lPush(key, JSON.stringify(messageWithId));
-        await redis.expire(key, 300);
-
-        const currentChunkId = await this.getCurrentChunkId(roomId);
-        await this.markChunkDirty(roomId, currentChunkId);
-
-        return messageId;
+    compressLZW(data) {
+        const dict = {};
+        let dictSize = 256;
+        const result = [];
+        let w = '';
+        
+        for (let i = 0; i < 256; i++) {
+            dict[String.fromCharCode(i)] = i;
+        }
+        
+        for (let i = 0; i < data.length; i++) {
+            const c = data[i];
+            const wc = w + c;
+            
+            if (dict.hasOwnProperty(wc)) {
+                w = wc;
+            } else {
+                result.push(dict[w]);
+                dict[wc] = dictSize++;
+                w = c;
+            }
+        }
+        
+        if (w !== '') {
+            result.push(dict[w]);
+        }
+        
+        const compressed = result.map(code => String.fromCharCode(code)).join('');
+        return Buffer.from(compressed).toString('base64');
     }
 
     decompressLZW(compressed) {
         try {
-            const data = atob(compressed);
+            const data = Buffer.from(compressed, 'base64').toString('binary');
             const codes = Array.from(data).map(c => c.charCodeAt(0));
             const dict = {};
             let dictSize = 256;
@@ -67,10 +70,53 @@ class MessageBatchService extends EnhancedCacheService {
                 w = entry;
             }
             
-            return atob(result);
+            return Buffer.from(result, 'binary').toString('base64');
         } catch (error) {
+            console.error('Decompression failed:', error);
             return compressed;
         }
+    }
+
+    async addMessageToBatch(roomId, messageData) {
+        const redis = await connectRedis();
+        const messageId = `${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+
+        let processedContent = messageData.content;
+        let finalCompressedSize = messageData.compressedSize || messageData.fileSize;
+        let finalOriginalSize = messageData.originalSize || messageData.fileSize;
+
+        if (messageData.type === 'document' && processedContent && !processedContent.startsWith('data:')) {
+            const compressedContent = this.compressLZW(processedContent);
+            processedContent = compressedContent;
+            finalCompressedSize = Buffer.byteLength(compressedContent, 'utf8');
+        }
+
+        if (finalCompressedSize && finalCompressedSize > 1024 * 1024) {
+            throw new Error('File too large even after compression');
+        }
+
+        const messageWithId = {
+            i: messageId,
+            s: messageData.sender,
+            c: processedContent,
+            t: Date.now(),
+            ty: messageData.type || 'text',
+            ...(messageData.fileName && { fn: messageData.fileName }),
+            ...(finalCompressedSize && { fs: finalCompressedSize }),
+            ...(messageData.fileType && { ft: messageData.fileType }),
+            ...(finalOriginalSize && { os: finalOriginalSize }),
+            ...(finalCompressedSize && { cs: finalCompressedSize }),
+            ...(messageData.replyTo && { r: messageData.replyTo })
+        };
+
+        const key = `pending_messages:${roomId}`;
+        await redis.lPush(key, JSON.stringify(messageWithId));
+        await redis.expire(key, 300);
+
+        const currentChunkId = await this.getCurrentChunkId(roomId);
+        await this.markChunkDirty(roomId, currentChunkId);
+
+        return messageId;
     }
 
     async getLatestMessages(roomId) {

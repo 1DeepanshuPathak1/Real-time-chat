@@ -22,6 +22,77 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
   const [copiedMessageId, setCopiedMessageId] = useState(null);
   const [messageReactions, setMessageReactions] = useState({});
 
+  const decompressLZW = (compressed) => {
+    try {
+      const data = atob(compressed);
+      const codes = Array.from(data).map(c => c.charCodeAt(0));
+      const dict = {};
+      let dictSize = 256;
+      let result = '';
+      let w = String.fromCharCode(codes[0]);
+      result += w;
+      
+      for (let i = 0; i < 256; i++) {
+        dict[i] = String.fromCharCode(i);
+      }
+      
+      for (let i = 1; i < codes.length; i++) {
+        const k = codes[i];
+        let entry;
+        
+        if (dict[k]) {
+          entry = dict[k];
+        } else if (k === dictSize) {
+          entry = w + w[0];
+        } else {
+          throw new Error('Invalid compression');
+        }
+        
+        result += entry;
+        dict[dictSize++] = w + entry[0];
+        w = entry;
+      }
+      
+      return atob(result);
+    } catch (error) {
+      console.error('Decompression failed:', error);
+      return compressed;
+    }
+  };
+
+  const downloadDocument = async (message) => {
+    try {
+      let decompressedData;
+      
+      if (message.content.startsWith('data:')) {
+        decompressedData = message.content;
+      } else {
+        const binaryString = decompressLZW(message.content);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        const blob = new Blob([bytes], { type: message.fileType });
+        decompressedData = URL.createObjectURL(blob);
+      }
+      
+      const link = document.createElement('a');
+      link.href = decompressedData;
+      link.download = message.fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      if (!message.content.startsWith('data:')) {
+        URL.revokeObjectURL(decompressedData);
+      }
+    } catch (error) {
+      console.error('Error downloading document:', error);
+      alert('Failed to download document');
+    }
+  };
+
   useEffect(() => {
     const fetchLastReadMessageId = async () => {
       if (!user || !selectedContact) return;
@@ -29,10 +100,8 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
       try {
         const roomRef = doc(db, 'rooms', selectedContact.roomID);
         const roomDoc = await getDoc(roomRef);
-        if (roomDoc.exists()) {
-          const roomData = roomDoc.data();
-          lastReadMessageId.current = roomData?.[`lastReadMessageId_${user.uid}`] || null;
-        }
+        const roomData = roomDoc.data();
+        lastReadMessageId.current = roomData?.[`lastReadMessageId_${user.uid}`] || null;
       } catch (error) {
         console.error('Error fetching last read message ID:', error);
       }
@@ -101,24 +170,22 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
       
       try {
         const roomRef = doc(db, 'rooms', selectedContact.roomID);
-        const roomDoc = await getDoc(roomRef);
-        if (roomDoc.exists()) {
-          await updateDoc(roomRef, {
-            [`lastReadMessageId_${user.uid}`]: lastUnreadMessage.id,
-            [`lastReadTimestamp_${user.uid}`]: Date.now()
+        await updateDoc(roomRef, {
+          [`lastReadMessageId_${user.uid}`]: lastUnreadMessage.id,
+          [`lastReadTimestamp_${user.uid}`]: Date.now()
+        });
+
+        lastReadMessageId.current = lastUnreadMessage.id;
+
+        if (socket) {
+          socket.emit('mark-messages-read', {
+            roomId: selectedContact.roomID,
+            lastReadMessageId: lastUnreadMessage.id,
+            userId: user.uid,
+            userEmail: user.email
           });
-
-          lastReadMessageId.current = lastUnreadMessage.id;
-
-          if (socket) {
-            socket.emit('mark-messages-read', {
-              roomId: selectedContact.roomID,
-              lastReadMessageId: lastUnreadMessage.id,
-              userId: user.uid,
-              userEmail: user.email
-            });
-          }
         }
+
       } catch (error) {
         console.error('Error marking messages as read:', error);
       }
@@ -240,25 +307,6 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
     return messages.find(msg => msg.id === replyToId);
   };
 
-  const handleDownloadDocument = (message) => {
-    try {
-      if (message.type === 'document' && message.content) {
-        const decompressed = chunkedMessageService.decompressContent(message.content, 'document');
-        const blob = new Blob([decompressed], { type: message.fileType || 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = message.fileName || 'document';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }
-    } catch (error) {
-      console.error('Error downloading document:', error);
-    }
-  };
-
   const renderReactions = (message) => {
     const reactions = messageReactions[message.id];
     
@@ -376,16 +424,14 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
             <FiFile className="document-icon" />
             <div className="document-details">
               <span className="document-name">{message.fileName || message.content}</span>
-              {message.fileSize && (
-                <span className="document-size">
-                  {(message.fileSize / 1024).toFixed(1)} KB
-                </span>
-              )}
+              <span className="document-size">
+                {message.compressedSize ? `${Math.round(message.compressedSize / 1024)}KB` : 'Unknown size'}
+              </span>
             </div>
           </div>
           <button 
-            className="document-download-btn"
-            onClick={() => handleDownloadDocument(message)}
+            className="download-button"
+            onClick={() => downloadDocument(message)}
             title="Download document"
           >
             <FiDownload />
@@ -437,7 +483,7 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
             data-message-id={message.id}
           >
             <div 
-              className={`message-content ${message.type === 'image' ? 'image-message' : ''} ${copiedMessageId === message.id ? 'copied-flash' : ''}`}
+              className={`message-content ${message.type === 'image' ? 'image-message' : ''} ${message.type === 'document' ? 'document-message-container' : ''} ${copiedMessageId === message.id ? 'copied-flash' : ''}`}
               onContextMenu={(e) => handleContextMenu(e, message)}
             >
               {message.replyTo && (
@@ -497,4 +543,4 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
       />
     </div>
   );
-};
+}

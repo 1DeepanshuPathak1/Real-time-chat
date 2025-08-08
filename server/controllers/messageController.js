@@ -6,25 +6,148 @@ class MessageController {
         this.batchService = new MessageBatchService(db);
     }
 
+    compressLZW(data) {
+        const dict = {};
+        let dictSize = 256;
+        const result = [];
+        let w = '';
+        
+        for (let i = 0; i < 256; i++) {
+            dict[String.fromCharCode(i)] = i;
+        }
+        
+        for (let i = 0; i < data.length; i++) {
+            const c = data[i];
+            const wc = w + c;
+            
+            if (dict.hasOwnProperty(wc)) {
+                w = wc;
+            } else {
+                result.push(dict[w]);
+                dict[wc] = dictSize++;
+                w = c;
+            }
+        }
+        
+        if (w !== '') {
+            result.push(dict[w]);
+        }
+        
+        const compressed = result.map(code => String.fromCharCode(code)).join('');
+        return Buffer.from(compressed).toString('base64');
+    }
+
+    decompressLZW(compressed) {
+        try {
+            const data = Buffer.from(compressed, 'base64').toString('binary');
+            const codes = Array.from(data).map(c => c.charCodeAt(0));
+            const dict = {};
+            let dictSize = 256;
+            let result = '';
+            let w = String.fromCharCode(codes[0]);
+            result += w;
+            
+            for (let i = 0; i < 256; i++) {
+                dict[i] = String.fromCharCode(i);
+            }
+            
+            for (let i = 1; i < codes.length; i++) {
+                const k = codes[i];
+                let entry;
+                
+                if (dict[k]) {
+                    entry = dict[k];
+                } else if (k === dictSize) {
+                    entry = w + w[0];
+                } else {
+                    throw new Error('Invalid compression');
+                }
+                
+                result += entry;
+                dict[dictSize++] = w + entry[0];
+                w = entry;
+            }
+            
+            return Buffer.from(result, 'binary').toString('base64');
+        } catch (error) {
+            console.error('Decompression failed:', error);
+            return compressed;
+        }
+    }
+
+    compressImage(base64Data) {
+        try {
+            const canvas = require('canvas');
+            const { createCanvas, loadImage } = canvas;
+            
+            return new Promise(async (resolve) => {
+                try {
+                    const img = await loadImage(base64Data);
+                    let { width, height } = img;
+                    const maxSize = 800;
+                    
+                    if (width > height && width > maxSize) {
+                        height = (height * maxSize) / width;
+                        width = maxSize;
+                    } else if (height > maxSize) {
+                        width = (width * maxSize) / height;
+                        height = maxSize;
+                    }
+                    
+                    const compressedCanvas = createCanvas(width, height);
+                    const ctx = compressedCanvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    const compressedDataUrl = compressedCanvas.toDataURL('image/jpeg', 0.7);
+                    resolve(compressedDataUrl);
+                } catch (error) {
+                    console.error('Image compression failed:', error);
+                    resolve(base64Data);
+                }
+            });
+        } catch (error) {
+            console.error('Canvas not available, using original image');
+            return base64Data;
+        }
+    }
+
     async sendMessage(req, res) {
-        const { roomId, sender, content, type = 'text', fileName, fileSize, fileType, fileUrl, replyTo } = req.body;
+        const { roomId, sender, content, type = 'text', fileName, fileSize, fileType, fileUrl, replyTo, originalSize, compressedSize } = req.body;
 
         try {
             if (!roomId || !sender || !content) {
                 return res.status(400).json({ error: 'Missing required fields' });
             }
 
+            let processedContent = content;
+            let finalCompressedSize = compressedSize || fileSize;
+            let finalOriginalSize = originalSize || fileSize;
+
+            if (type === 'document' && !content.startsWith('data:')) {
+                const compressedContent = this.compressLZW(content);
+                processedContent = compressedContent;
+                finalCompressedSize = Buffer.byteLength(compressedContent, 'utf8');
+            } else if (type === 'image' && content.startsWith('data:')) {
+                processedContent = content;
+            }
+
+            if (finalCompressedSize > 1024 * 1024) {
+                return res.status(413).json({ error: 'File too large even after compression' });
+            }
+
             const messageData = {
                 sender,
-                content,
+                content: processedContent,
                 time: new Date().toISOString(),
                 type,
                 isDelivered: false,
                 isRead: false,
                 ...(fileName && { fileName }),
-                ...(fileSize && { fileSize }),
+                ...(finalCompressedSize && { fileSize: finalCompressedSize }),
                 ...(fileType && { fileType }),
                 ...(fileUrl && { fileUrl }),
+                ...(finalOriginalSize && { originalSize: finalOriginalSize }),
+                ...(finalCompressedSize && { compressedSize: finalCompressedSize }),
                 ...(replyTo && { replyTo })
             };
 
@@ -33,7 +156,9 @@ class MessageController {
             res.status(200).json({
                 success: true,
                 messageId,
-                message: 'Message queued for delivery'
+                message: 'Message queued for delivery',
+                compressedSize: finalCompressedSize,
+                originalSize: finalOriginalSize
             });
         } catch (error) {
             console.error('Error sending message:', error);
@@ -62,9 +187,19 @@ class MessageController {
             const latestChunk = chunks[chunks.length - 1];
             const allMessages = chunks.flatMap(chunk => chunk.messages);
 
+            const processedMessages = allMessages.map(msg => {
+                if (msg.type === 'document' && msg.content && !msg.content.startsWith('data:')) {
+                    return {
+                        ...msg,
+                        content: this.decompressLZW(msg.content)
+                    };
+                }
+                return msg;
+            });
+
             res.status(200).json({
                 id: latestChunk.id,
-                messages: allMessages,
+                messages: processedMessages,
                 hasMore: chunks.length > 1 || chunks[0].hasMore
             });
         } catch (error) {
@@ -83,9 +218,19 @@ class MessageController {
 
             const result = await this.batchService.getOlderMessages(roomId, chunkId);
 
+            const processedMessages = result.messages.map(msg => {
+                if (msg.type === 'document' && msg.content && !msg.content.startsWith('data:')) {
+                    return {
+                        ...msg,
+                        content: this.decompressLZW(msg.content)
+                    };
+                }
+                return msg;
+            });
+
             res.status(200).json({
                 id: result.chunkId,
-                messages: result.messages,
+                messages: processedMessages,
                 hasMore: result.hasMore
             });
         } catch (error) {
@@ -104,8 +249,18 @@ class MessageController {
 
             const pendingMessages = await this.batchService.getMessagesFromRedis(roomId);
 
+            const processedMessages = pendingMessages.map(msg => {
+                if (msg.type === 'document' && msg.content && !msg.content.startsWith('data:')) {
+                    return {
+                        ...msg,
+                        content: this.decompressLZW(msg.content)
+                    };
+                }
+                return msg;
+            });
+
             res.status(200).json({
-                messages: pendingMessages
+                messages: processedMessages
             });
         } catch (error) {
             console.error('Error fetching pending messages:', error);

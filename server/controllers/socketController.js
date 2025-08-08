@@ -9,6 +9,44 @@ class SocketController {
         this.setupSocketEvents();
     }
 
+    decompressLZW(compressed) {
+        try {
+            const data = Buffer.from(compressed, 'base64').toString('binary');
+            const codes = Array.from(data).map(c => c.charCodeAt(0));
+            const dict = {};
+            let dictSize = 256;
+            let result = '';
+            let w = String.fromCharCode(codes[0]);
+            result += w;
+            
+            for (let i = 0; i < 256; i++) {
+                dict[i] = String.fromCharCode(i);
+            }
+            
+            for (let i = 1; i < codes.length; i++) {
+                const k = codes[i];
+                let entry;
+                
+                if (dict[k]) {
+                    entry = dict[k];
+                } else if (k === dictSize) {
+                    entry = w + w[0];
+                } else {
+                    throw new Error('Invalid compression');
+                }
+                
+                result += entry;
+                dict[dictSize++] = w + entry[0];
+                w = entry;
+            }
+            
+            return Buffer.from(result, 'binary').toString('base64');
+        } catch (error) {
+            console.error('Decompression failed:', error);
+            return compressed;
+        }
+    }
+
     setupSocketEvents() {
         this.io.on('connection', (socket) => {
             console.log('Socket connection established with id', socket.id);
@@ -19,7 +57,7 @@ class SocketController {
             });
 
             socket.on('send-message', async (data) => {
-                const { roomID, message, sender, messageId, type, replyTo, fileName } = data;
+                const { roomID, message, sender, messageId, type, replyTo, fileName, fileSize, originalSize } = data;
                 try {
                     let processedContent = message;
                     
@@ -28,7 +66,11 @@ class SocketController {
                         if (chunks.length > 0) {
                             const foundMessage = chunks[0].messages.find(msg => msg.id === messageId);
                             if (foundMessage && foundMessage.content) {
-                                processedContent = foundMessage.content;
+                                if (type === 'document' && !foundMessage.content.startsWith('data:')) {
+                                    processedContent = this.decompressLZW(foundMessage.content);
+                                } else {
+                                    processedContent = foundMessage.content;
+                                }
                             }
                         }
                     }
@@ -41,6 +83,8 @@ class SocketController {
                         timestamp: data.timestamp,
                         type: type || 'text',
                         fileName: fileName,
+                        fileSize: fileSize,
+                        originalSize: originalSize,
                         ...(replyTo && { replyTo })
                     });
 

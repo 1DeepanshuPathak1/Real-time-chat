@@ -8,6 +8,75 @@ class EnhancedCacheService {
         this.startCacheManager();
     }
 
+    compressLZW(data) {
+        const dict = {};
+        let dictSize = 256;
+        const result = [];
+        let w = '';
+        
+        for (let i = 0; i < 256; i++) {
+            dict[String.fromCharCode(i)] = i;
+        }
+        
+        for (let i = 0; i < data.length; i++) {
+            const c = data[i];
+            const wc = w + c;
+            
+            if (dict.hasOwnProperty(wc)) {
+                w = wc;
+            } else {
+                result.push(dict[w]);
+                dict[wc] = dictSize++;
+                w = c;
+            }
+        }
+        
+        if (w !== '') {
+            result.push(dict[w]);
+        }
+        
+        const compressed = result.map(code => String.fromCharCode(code)).join('');
+        return Buffer.from(compressed).toString('base64');
+    }
+
+    decompressLZW(compressed) {
+        try {
+            const data = Buffer.from(compressed, 'base64').toString('binary');
+            const codes = Array.from(data).map(c => c.charCodeAt(0));
+            const dict = {};
+            let dictSize = 256;
+            let result = '';
+            let w = String.fromCharCode(codes[0]);
+            result += w;
+            
+            for (let i = 0; i < 256; i++) {
+                dict[i] = String.fromCharCode(i);
+            }
+            
+            for (let i = 1; i < codes.length; i++) {
+                const k = codes[i];
+                let entry;
+                
+                if (dict[k]) {
+                    entry = dict[k];
+                } else if (k === dictSize) {
+                    entry = w + w[0];
+                } else {
+                    throw new Error('Invalid compression');
+                }
+                
+                result += entry;
+                dict[dictSize++] = w + entry[0];
+                w = entry;
+            }
+            
+            return Buffer.from(result, 'binary').toString('base64');
+        } catch (error) {
+            console.error('Decompression failed:', error);
+            return compressed;
+        }
+    }
+
     async getChunksFromCache(roomId, count = 2) {
         const redis = await connectRedis();
         const latestChunkId = await this.getLatestChunkId(roomId);
@@ -45,8 +114,20 @@ class EnhancedCacheService {
     async cacheChunk(roomId, chunkId, chunkData) {
         const redis = await connectRedis();
         const cacheKey = `chunk:${roomId}:${chunkId}`;
+        
+        const compressedMessages = chunkData.messages.map(msg => {
+            if (msg.type === 'document' && msg.content && !msg.content.startsWith('data:')) {
+                return {
+                    ...msg,
+                    content: this.compressLZW(msg.content)
+                };
+            }
+            return msg;
+        });
+        
         await redis.setEx(cacheKey, this.chunkTTL, JSON.stringify({
             ...chunkData,
+            messages: compressedMessages,
             isDirty: false
         }));
     }
@@ -83,9 +164,12 @@ class EnhancedCacheService {
         const chunkDoc = await chunkRef.get();
         
         if (chunkDoc.exists) {
+            const chunkData = chunkDoc.data();
+            const decompressedMessages = this.formatMessages(chunkData.messages || []);
+            
             return {
                 id: chunkId,
-                messages: this.formatMessages(chunkDoc.data().messages || []),
+                messages: decompressedMessages,
                 hasMore: parseInt(chunkId.split('_')[1]) > 1
             };
         }
@@ -94,8 +178,11 @@ class EnhancedCacheService {
 
     async writeChunkToDB(roomId, chunkId, chunkData) {
         const chunkRef = this.db.collection('rooms').doc(roomId).collection('messageChunks').doc(chunkId);
+        
+        const compressedMessages = chunkData.messages.map(msg => this.compressMessage(msg));
+        
         await chunkRef.set({
-            messages: chunkData.messages.map(this.compressMessage),
+            messages: compressedMessages,
             updatedAt: new Date().toISOString(),
             messageCount: chunkData.messages.length
         }, { merge: true });
@@ -143,30 +230,56 @@ class EnhancedCacheService {
     }
 
     compressMessage(msg) {
+        let content = msg.content || msg.c;
+        
+        if (msg.type === 'document' && content && !content.startsWith('data:')) {
+            content = this.compressLZW(content);
+        }
+        
         return {
-            i: msg.id,
-            s: msg.sender,
-            c: msg.content,
-            t: msg.timestamp,
-            ty: msg.type || 'text',
+            i: msg.id || msg.i,
+            s: msg.sender || msg.s,
+            c: content,
+            t: msg.timestamp || msg.t,
+            ty: msg.type || msg.ty || 'text',
             ...(msg.fileName && { fn: msg.fileName }),
+            ...(msg.fileSize && { fs: msg.fileSize }),
+            ...(msg.fileType && { ft: msg.fileType }),
+            ...(msg.originalSize && { os: msg.originalSize }),
+            ...(msg.compressedSize && { cs: msg.compressedSize }),
             ...(msg.replyTo && { r: msg.replyTo }),
             ...(msg.em && { em: msg.em })
         };
     }
 
     formatMessages(messages) {
-        return messages.map(msg => ({
-            id: msg.i || msg.id,
-            sender: msg.s || msg.sender,
-            content: msg.c || msg.content,
-            time: new Date(msg.t || msg.timestamp || msg.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            timestamp: msg.t || msg.timestamp || msg.time,
-            type: msg.ty || msg.type || 'text',
-            fileName: msg.fn || msg.fileName,
-            replyTo: msg.r || msg.replyTo,
-            em: msg.em
-        }));
+        return messages.map(msg => {
+            let content = msg.c || msg.content;
+            
+            if (msg.ty === 'document' && content && !content.startsWith('data:')) {
+                try {
+                    content = this.decompressLZW(content);
+                } catch (error) {
+                    console.error('Error decompressing message content:', error);
+                }
+            }
+            
+            return {
+                id: msg.i || msg.id,
+                sender: msg.s || msg.sender,
+                content: content,
+                time: new Date(msg.t || msg.timestamp || msg.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                timestamp: msg.t || msg.timestamp || msg.time,
+                type: msg.ty || msg.type || 'text',
+                fileName: msg.fn || msg.fileName,
+                fileSize: msg.fs || msg.fileSize,
+                fileType: msg.ft || msg.fileType,
+                originalSize: msg.os || msg.originalSize,
+                compressedSize: msg.cs || msg.compressedSize,
+                replyTo: msg.r || msg.replyTo,
+                em: msg.em
+            };
+        });
     }
 }
 

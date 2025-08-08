@@ -1,10 +1,38 @@
-import React, { useState } from 'react';
-import { getFirestore, collection, addDoc } from 'firebase/firestore';
-
-const db = getFirestore();
+import { useState } from 'react';
+import chunkedMessageService from '../../services/chunkedMessageService';
 
 export const useCameraHandlers = (setMessages, videoRef, selectedContact, user) => {
   const [stream, setStream] = useState(null);
+
+  const compressImage = (dataUrl) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    
+    return new Promise((resolve) => {
+      img.onload = () => {
+        let { width, height } = img;
+        const maxSize = 800;
+        
+        if (width > height && width > maxSize) {
+          height = (height * maxSize) / width;
+          width = maxSize;
+        } else if (height > maxSize) {
+          width = (width * maxSize) / height;
+          height = maxSize;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        resolve(compressedDataUrl);
+      };
+      
+      img.src = dataUrl;
+    });
+  };
 
   const startCamera = async () => {
     try {
@@ -26,28 +54,59 @@ export const useCameraHandlers = (setMessages, videoRef, selectedContact, user) 
   };
 
   const captureImage = async () => {
-    if (videoRef.current && selectedContact) {
+    if (videoRef.current && selectedContact && user) {
       const canvas = document.createElement('canvas');
       canvas.width = videoRef.current.videoWidth;
       canvas.height = videoRef.current.videoHeight;
       canvas.getContext('2d').drawImage(videoRef.current, 0, 0);
-      const imageData = canvas.toDataURL('image/jpeg');
-
-      const newMessage = {
-        sender: user.email, // Fix: use sender's email, not recipient's
-        content: imageData,
-        time: new Date().toISOString(),
-        type: 'image'
-      };
+      const originalImageData = canvas.toDataURL('image/jpeg');
       
-      const docRef = await addDoc(collection(db, 'rooms', selectedContact.roomID, 'messages'), newMessage);
-      setMessages(prev => [...prev, { ...newMessage, id: docRef.id }]);
+      const compressedImageData = await compressImage(originalImageData);
+      const compressedSize = new Blob([compressedImageData]).size;
+      const originalSize = new Blob([originalImageData]).size;
 
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
+      if (compressedSize > 1024 * 1024) {
+        alert('Image too large even after compression. Please try again.');
+        return false;
       }
-      
-      return true;
+
+      const messageData = {
+        sender: user.email,
+        content: compressedImageData,
+        type: 'image',
+        fileName: `camera_capture_${Date.now()}.jpg`,
+        fileSize: compressedSize,
+        fileType: 'image/jpeg',
+        originalSize: originalSize,
+        compressedSize: compressedSize
+      };
+
+      try {
+        const messageId = await chunkedMessageService.sendMessage(selectedContact.roomID, messageData);
+
+        const newMessage = {
+          id: messageId,
+          sender: user.email,
+          content: compressedImageData,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          timestamp: Date.now(),
+          type: 'image',
+          fileName: messageData.fileName,
+          fileSize: compressedSize,
+          originalSize: originalSize
+        };
+        
+        setMessages(prev => [...prev, newMessage]);
+
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+        }
+        
+        return true;
+      } catch (error) {
+        console.error('Error saving captured image:', error);
+        return false;
+      }
     }
     return false;
   };
@@ -55,6 +114,7 @@ export const useCameraHandlers = (setMessages, videoRef, selectedContact, user) 
   const stopCamera = () => {
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
+      setStream(null);
     }
   };
 
