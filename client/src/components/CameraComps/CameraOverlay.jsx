@@ -1,4 +1,3 @@
-import React from 'react';
 import { FiCamera } from 'react-icons/fi';
 
 export const CameraOverlay = ({ videoRef, onCapture, onClose, stream }) => {
@@ -24,3 +23,4 @@ export const CameraOverlay = ({ videoRef, onCapture, onClose, stream }) => {
     </div>
   );
 };
+

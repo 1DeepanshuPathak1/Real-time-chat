@@ -6,75 +6,6 @@ class MessageController {
         this.batchService = new MessageBatchService(db);
     }
 
-    compressLZW(data) {
-        const dict = {};
-        let dictSize = 256;
-        const result = [];
-        let w = '';
-        
-        for (let i = 0; i < 256; i++) {
-            dict[String.fromCharCode(i)] = i;
-        }
-        
-        for (let i = 0; i < data.length; i++) {
-            const c = data[i];
-            const wc = w + c;
-            
-            if (dict.hasOwnProperty(wc)) {
-                w = wc;
-            } else {
-                result.push(dict[w]);
-                dict[wc] = dictSize++;
-                w = c;
-            }
-        }
-        
-        if (w !== '') {
-            result.push(dict[w]);
-        }
-        
-        const compressed = result.map(code => String.fromCharCode(code)).join('');
-        return Buffer.from(compressed).toString('base64');
-    }
-
-    decompressLZW(compressed) {
-        try {
-            const data = Buffer.from(compressed, 'base64').toString('binary');
-            const codes = Array.from(data).map(c => c.charCodeAt(0));
-            const dict = {};
-            let dictSize = 256;
-            let result = '';
-            let w = String.fromCharCode(codes[0]);
-            result += w;
-            
-            for (let i = 0; i < 256; i++) {
-                dict[i] = String.fromCharCode(i);
-            }
-            
-            for (let i = 1; i < codes.length; i++) {
-                const k = codes[i];
-                let entry;
-                
-                if (dict[k]) {
-                    entry = dict[k];
-                } else if (k === dictSize) {
-                    entry = w + w[0];
-                } else {
-                    throw new Error('Invalid compression');
-                }
-                
-                result += entry;
-                dict[dictSize++] = w + entry[0];
-                w = entry;
-            }
-            
-            return Buffer.from(result, 'binary').toString('base64');
-        } catch (error) {
-            console.error('Decompression failed:', error);
-            return compressed;
-        }
-    }
-
     compressImage(base64Data) {
         try {
             const canvas = require('canvas');
@@ -112,7 +43,7 @@ class MessageController {
     }
 
     async sendMessage(req, res) {
-        const { roomId, sender, content, type = 'text', fileName, fileSize, fileType, fileUrl, replyTo, originalSize, compressedSize } = req.body;
+        const { roomId, sender, content, type = 'text', fileName, fileSize, fileType, fileUrl, replyTo, originalSize } = req.body;
 
         try {
             if (!roomId || !sender || !content) {
@@ -120,19 +51,16 @@ class MessageController {
             }
 
             let processedContent = content;
-            let finalCompressedSize = compressedSize || fileSize;
-            let finalOriginalSize = originalSize || fileSize;
+            let finalSize = fileSize || originalSize;
 
-            if (type === 'document' && !content.startsWith('data:')) {
-                const compressedContent = this.compressLZW(content);
-                processedContent = compressedContent;
-                finalCompressedSize = Buffer.byteLength(compressedContent, 'utf8');
+            if (type === 'document') {
+                if (fileSize > 3 * 1024 * 1024) {
+                    return res.status(413).json({ error: 'Document files must be smaller than 3MB' });
+                }
+                processedContent = content;
+                finalSize = fileSize;
             } else if (type === 'image' && content.startsWith('data:')) {
                 processedContent = content;
-            }
-
-            if (finalCompressedSize > 1024 * 1024) {
-                return res.status(413).json({ error: 'File too large even after compression' });
             }
 
             const messageData = {
@@ -143,11 +71,10 @@ class MessageController {
                 isDelivered: false,
                 isRead: false,
                 ...(fileName && { fileName }),
-                ...(finalCompressedSize && { fileSize: finalCompressedSize }),
+                ...(finalSize && { fileSize: finalSize }),
                 ...(fileType && { fileType }),
                 ...(fileUrl && { fileUrl }),
-                ...(finalOriginalSize && { originalSize: finalOriginalSize }),
-                ...(finalCompressedSize && { compressedSize: finalCompressedSize }),
+                ...(originalSize && { originalSize: originalSize }),
                 ...(replyTo && { replyTo })
             };
 
@@ -157,8 +84,8 @@ class MessageController {
                 success: true,
                 messageId,
                 message: 'Message queued for delivery',
-                compressedSize: finalCompressedSize,
-                originalSize: finalOriginalSize
+                fileSize: finalSize,
+                originalSize: originalSize
             });
         } catch (error) {
             console.error('Error sending message:', error);
@@ -188,12 +115,6 @@ class MessageController {
             const allMessages = chunks.flatMap(chunk => chunk.messages);
 
             const processedMessages = allMessages.map(msg => {
-                if (msg.type === 'document' && msg.content && !msg.content.startsWith('data:')) {
-                    return {
-                        ...msg,
-                        content: this.decompressLZW(msg.content)
-                    };
-                }
                 return msg;
             });
 
@@ -219,12 +140,6 @@ class MessageController {
             const result = await this.batchService.getOlderMessages(roomId, chunkId);
 
             const processedMessages = result.messages.map(msg => {
-                if (msg.type === 'document' && msg.content && !msg.content.startsWith('data:')) {
-                    return {
-                        ...msg,
-                        content: this.decompressLZW(msg.content)
-                    };
-                }
                 return msg;
             });
 
@@ -250,12 +165,6 @@ class MessageController {
             const pendingMessages = await this.batchService.getMessagesFromRedis(roomId);
 
             const processedMessages = pendingMessages.map(msg => {
-                if (msg.type === 'document' && msg.content && !msg.content.startsWith('data:')) {
-                    return {
-                        ...msg,
-                        content: this.decompressLZW(msg.content)
-                    };
-                }
                 return msg;
             });
 

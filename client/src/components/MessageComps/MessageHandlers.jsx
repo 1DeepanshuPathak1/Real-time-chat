@@ -34,51 +34,16 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
     });
   };
 
-  const compressDocument = async (file) => {
+  const processDocument = async (file) => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const arrayBuffer = e.target.result;
-        const uint8Array = new Uint8Array(arrayBuffer);
-        const binaryString = String.fromCharCode.apply(null, uint8Array);
-        const base64String = btoa(binaryString);
-        
-        const compressed = compressLZW(base64String);
-        resolve(compressed);
+        const base64String = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+        resolve(`data:${file.type};base64,${base64String}`);
       };
       reader.readAsArrayBuffer(file);
     });
-  };
-
-  const compressLZW = (data) => {
-    const dict = {};
-    let dictSize = 256;
-    const result = [];
-    let w = '';
-    
-    for (let i = 0; i < 256; i++) {
-      dict[String.fromCharCode(i)] = i;
-    }
-    
-    for (let i = 0; i < data.length; i++) {
-      const c = data[i];
-      const wc = w + c;
-      
-      if (dict.hasOwnProperty(wc)) {
-        w = wc;
-      } else {
-        result.push(dict[w]);
-        dict[wc] = dictSize++;
-        w = c;
-      }
-    }
-    
-    if (w !== '') {
-      result.push(dict[w]);
-    }
-    
-    const compressed = result.map(code => String.fromCharCode(code)).join('');
-    return btoa(compressed);
   };
 
   const handleSendMessage = async (inputMessage, setInputMessage, replyTo = null) => {
@@ -133,34 +98,34 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
   const handleFileUpload = async (file, type) => {
     if (!file || !selectedContact || !user || isSending) return;
 
+    if (type === 'document' && file.size > 3 * 1024 * 1024) {
+      alert('Document files must be smaller than 3MB.');
+      return;
+    }
+
     setIsSending(true);
 
     try {
-      let compressedContent;
+      let processedContent;
       let originalSize = file.size;
+      let finalSize = originalSize;
       
       if (type === 'image') {
-        compressedContent = await compressFile(file);
+        processedContent = await compressFile(file);
+        finalSize = new Blob([processedContent]).size;
       } else if (type === 'document') {
-        compressedContent = await compressDocument(file);
-      }
-
-      const compressedSize = new Blob([compressedContent]).size;
-
-      if (compressedSize > 1024 * 1024) {
-        alert('File too large even after compression. Please choose a smaller file.');
-        return;
+        processedContent = await processDocument(file);
+        finalSize = originalSize;
       }
 
       const messageData = {
         sender: user.email,
-        content: compressedContent,
+        content: processedContent,
         type: type,
         fileName: file.name,
-        fileSize: compressedSize,
+        fileSize: finalSize,
         fileType: file.type,
-        originalSize: originalSize,
-        compressedSize: compressedSize
+        originalSize: originalSize
       };
 
       const messageId = await chunkedMessageService.sendMessage(selectedContact.roomID, messageData);
@@ -168,15 +133,14 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
       const newMessage = {
         id: messageId,
         sender: user.email,
-        content: type === 'image' ? compressedContent : URL.createObjectURL(file),
+        content: type === 'image' ? processedContent : URL.createObjectURL(file),
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         timestamp: Date.now(),
         type: type,
         fileName: file.name,
-        fileSize: compressedSize,
+        fileSize: finalSize,
         fileType: file.type,
         originalSize: originalSize,
-        compressedSize: compressedSize,
         isDelivered: false,
         isRead: false
       };
@@ -186,13 +150,13 @@ export const useMessageHandlers = (setMessages, socket, selectedContact, user) =
       if (socket) {
         socket.emit('send-message', {
           roomID: selectedContact.roomID,
-          message: compressedContent,
+          message: processedContent,
           sender: user.email,
           messageId: messageId,
           type: type,
           fileName: file.name,
           timestamp: newMessage.timestamp,
-          fileSize: compressedSize,
+          fileSize: finalSize,
           originalSize: originalSize
         });
       }

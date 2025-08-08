@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { FiFile, FiDownload } from 'react-icons/fi';
+import { FiFile, FiDownload, FiEye, FiX } from 'react-icons/fi';
 import { MessageStatusIndicator } from './MessageStatus';
 import { MessageContextMenu } from './MessageContextMenu';
 import { MessageInfoModal } from './MessageInfoModal';
@@ -21,76 +21,55 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [copiedMessageId, setCopiedMessageId] = useState(null);
   const [messageReactions, setMessageReactions] = useState({});
-
-  const decompressLZW = (compressed) => {
-    try {
-      const data = atob(compressed);
-      const codes = Array.from(data).map(c => c.charCodeAt(0));
-      const dict = {};
-      let dictSize = 256;
-      let result = '';
-      let w = String.fromCharCode(codes[0]);
-      result += w;
-      
-      for (let i = 0; i < 256; i++) {
-        dict[i] = String.fromCharCode(i);
-      }
-      
-      for (let i = 1; i < codes.length; i++) {
-        const k = codes[i];
-        let entry;
-        
-        if (dict[k]) {
-          entry = dict[k];
-        } else if (k === dictSize) {
-          entry = w + w[0];
-        } else {
-          throw new Error('Invalid compression');
-        }
-        
-        result += entry;
-        dict[dictSize++] = w + entry[0];
-        w = entry;
-      }
-      
-      return atob(result);
-    } catch (error) {
-      console.error('Decompression failed:', error);
-      return compressed;
-    }
-  };
+  const [imagePreview, setImagePreview] = useState({ show: false, src: '', fileName: '' });
 
   const downloadDocument = async (message) => {
     try {
-      let decompressedData;
+      let downloadData;
       
       if (message.content.startsWith('data:')) {
-        decompressedData = message.content;
+        downloadData = message.content;
       } else {
-        const binaryString = decompressLZW(message.content);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        
-        const blob = new Blob([bytes], { type: message.fileType });
-        decompressedData = URL.createObjectURL(blob);
+        const blob = new Blob([message.content], { type: message.fileType });
+        downloadData = URL.createObjectURL(blob);
       }
       
       const link = document.createElement('a');
-      link.href = decompressedData;
+      link.href = downloadData;
       link.download = message.fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       
       if (!message.content.startsWith('data:')) {
-        URL.revokeObjectURL(decompressedData);
+        URL.revokeObjectURL(downloadData);
       }
     } catch (error) {
       console.error('Error downloading document:', error);
       alert('Failed to download document');
     }
+  };
+
+  const downloadImage = async (message) => {
+    try {
+      const link = document.createElement('a');
+      link.href = message.content;
+      link.download = message.fileName || `image_${Date.now()}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error downloading image:', error);
+      alert('Failed to download image');
+    }
+  };
+
+  const previewImage = (src, fileName) => {
+    setImagePreview({ show: true, src, fileName });
+  };
+
+  const closeImagePreview = () => {
+    setImagePreview({ show: false, src: '', fileName: '' });
   };
 
   useEffect(() => {
@@ -200,16 +179,20 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
       if (contextMenu.show && !event.target.closest('.message-context-menu') && !event.target.closest('.context-emoji-picker')) {
         handleCloseContextMenu();
       }
+      if (imagePreview.show && !event.target.closest('.image-preview-modal')) {
+        closeImagePreview();
+      }
     };
 
     const handleEscapeKey = (event) => {
       if (event.key === 'Escape') {
         handleCloseContextMenu();
         setShowMessageInfo(false);
+        closeImagePreview();
       }
     };
 
-    if (contextMenu.show || showMessageInfo) {
+    if (contextMenu.show || showMessageInfo || imagePreview.show) {
       document.addEventListener('mousedown', handleClickOutside);
       document.addEventListener('keydown', handleEscapeKey);
       return () => {
@@ -217,7 +200,7 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
         document.removeEventListener('keydown', handleEscapeKey);
       };
     }
-  }, [contextMenu.show, showMessageInfo]);
+  }, [contextMenu.show, showMessageInfo, imagePreview.show]);
 
   useEffect(() => {
     if (socket) {
@@ -416,7 +399,27 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
 
   const renderMessageContent = (message) => {
     if (message.type === 'image') {
-      return <img src={message.content} alt="Shared" className="shared-image" />;
+      return (
+        <div className="image-message-container">
+          <img src={message.content} alt="Shared" className="shared-image" />
+          <div className="image-actions">
+            <button 
+              className="image-action-btn preview-btn"
+              onClick={() => previewImage(message.content, message.fileName)}
+              title="Preview image"
+            >
+              <FiEye />
+            </button>
+            <button 
+              className="image-action-btn download-btn"
+              onClick={() => downloadImage(message)}
+              title="Download image"
+            >
+              <FiDownload />
+            </button>
+          </div>
+        </div>
+      );
     } else if (message.type === 'document') {
       return (
         <div className="document-message">
@@ -425,7 +428,7 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
             <div className="document-details">
               <span className="document-name">{message.fileName || message.content}</span>
               <span className="document-size">
-                {message.compressedSize ? `${Math.round(message.compressedSize / 1024)}KB` : 'Unknown size'}
+                {message.fileSize ? `${Math.round(message.fileSize / 1024)}KB` : 'Unknown size'}
               </span>
             </div>
           </div>
@@ -515,6 +518,37 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
       ))}
       <div ref={messagesEndRef} />
       
+      {imagePreview.show && (
+        <div className="image-preview-modal">
+          <div className="image-preview-overlay" onClick={closeImagePreview}>
+            <div className="image-preview-container" onClick={(e) => e.stopPropagation()}>
+              <div className="image-preview-header">
+                <span className="image-preview-title">{imagePreview.fileName || 'Image'}</span>
+                <button className="image-preview-close" onClick={closeImagePreview}>
+                  <FiX />
+                </button>
+              </div>
+              <div className="image-preview-content">
+                <img src={imagePreview.src} alt="Preview" className="preview-image" />
+              </div>
+              <div className="image-preview-actions">
+                <button 
+                  className="preview-download-btn"
+                  onClick={() => {
+                    const link = document.createElement('a');
+                    link.href = imagePreview.src;
+                    link.download = imagePreview.fileName || `image_${Date.now()}.jpg`;
+                    link.click();
+                  }}
+                >
+                  <FiDownload /> Download
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <MessageContextMenu
         show={contextMenu.show}
         position={contextMenu.position}
@@ -543,4 +577,4 @@ export const MessageList = ({ messages, messagesEndRef, handleDocumentClick, cur
       />
     </div>
   );
-}
+};

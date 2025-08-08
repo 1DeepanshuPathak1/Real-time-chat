@@ -8,91 +8,18 @@ class MessageBatchService extends EnhancedCacheService {
         this.startBatchProcessor();
     }
 
-    compressLZW(data) {
-        const dict = {};
-        let dictSize = 256;
-        const result = [];
-        let w = '';
-        
-        for (let i = 0; i < 256; i++) {
-            dict[String.fromCharCode(i)] = i;
-        }
-        
-        for (let i = 0; i < data.length; i++) {
-            const c = data[i];
-            const wc = w + c;
-            
-            if (dict.hasOwnProperty(wc)) {
-                w = wc;
-            } else {
-                result.push(dict[w]);
-                dict[wc] = dictSize++;
-                w = c;
-            }
-        }
-        
-        if (w !== '') {
-            result.push(dict[w]);
-        }
-        
-        const compressed = result.map(code => String.fromCharCode(code)).join('');
-        return Buffer.from(compressed).toString('base64');
-    }
-
-    decompressLZW(compressed) {
-        try {
-            const data = Buffer.from(compressed, 'base64').toString('binary');
-            const codes = Array.from(data).map(c => c.charCodeAt(0));
-            const dict = {};
-            let dictSize = 256;
-            let result = '';
-            let w = String.fromCharCode(codes[0]);
-            result += w;
-            
-            for (let i = 0; i < 256; i++) {
-                dict[i] = String.fromCharCode(i);
-            }
-            
-            for (let i = 1; i < codes.length; i++) {
-                const k = codes[i];
-                let entry;
-                
-                if (dict[k]) {
-                    entry = dict[k];
-                } else if (k === dictSize) {
-                    entry = w + w[0];
-                } else {
-                    throw new Error('Invalid compression');
-                }
-                
-                result += entry;
-                dict[dictSize++] = w + entry[0];
-                w = entry;
-            }
-            
-            return Buffer.from(result, 'binary').toString('base64');
-        } catch (error) {
-            console.error('Decompression failed:', error);
-            return compressed;
-        }
-    }
-
     async addMessageToBatch(roomId, messageData) {
         const redis = await connectRedis();
         const messageId = `${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
 
         let processedContent = messageData.content;
-        let finalCompressedSize = messageData.compressedSize || messageData.fileSize;
-        let finalOriginalSize = messageData.originalSize || messageData.fileSize;
+        let finalSize = messageData.fileSize || messageData.originalSize;
 
-        if (messageData.type === 'document' && processedContent && !processedContent.startsWith('data:')) {
-            const compressedContent = this.compressLZW(processedContent);
-            processedContent = compressedContent;
-            finalCompressedSize = Buffer.byteLength(compressedContent, 'utf8');
-        }
-
-        if (finalCompressedSize && finalCompressedSize > 1024 * 1024) {
-            throw new Error('File too large even after compression');
+        if (messageData.type === 'document') {
+            if (finalSize && finalSize > 3 * 1024 * 1024) {
+                throw new Error('Document files must be smaller than 3MB');
+            }
+            processedContent = messageData.content;
         }
 
         const messageWithId = {
@@ -102,10 +29,9 @@ class MessageBatchService extends EnhancedCacheService {
             t: Date.now(),
             ty: messageData.type || 'text',
             ...(messageData.fileName && { fn: messageData.fileName }),
-            ...(finalCompressedSize && { fs: finalCompressedSize }),
+            ...(finalSize && { fs: finalSize }),
             ...(messageData.fileType && { ft: messageData.fileType }),
-            ...(finalOriginalSize && { os: finalOriginalSize }),
-            ...(finalCompressedSize && { cs: finalCompressedSize }),
+            ...(messageData.originalSize && { os: messageData.originalSize }),
             ...(messageData.replyTo && { r: messageData.replyTo })
         };
 

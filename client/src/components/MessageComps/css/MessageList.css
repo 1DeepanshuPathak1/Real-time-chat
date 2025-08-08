@@ -17,11 +17,187 @@
   background-color: #121212;
 }
 
+.image-message-container {
+  position: relative;
+  display: inline-block;
+}
+
 .shared-image {
   max-width: 300px;
   max-height: 300px;
   border-radius: 8px;
   margin-bottom: 8px;
+  display: block;
+}
+
+.image-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.image-message-container:hover .image-actions {
+  opacity: 1;
+}
+
+.image-action-btn {
+  background: rgba(0, 0, 0, 0.7);
+  border: none;
+  color: white;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+}
+
+.image-action-btn:hover {
+  background: rgba(0, 0, 0, 0.9);
+  transform: scale(1.1);
+}
+
+.preview-btn {
+  background: rgba(59, 130, 246, 0.8);
+}
+
+.preview-btn:hover {
+  background: rgba(59, 130, 246, 1);
+}
+
+.download-btn {
+  background: rgba(16, 185, 129, 0.8);
+}
+
+.download-btn:hover {
+  background: rgba(16, 185, 129, 1);
+}
+
+.image-preview-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(8px);
+}
+
+.image-preview-overlay {
+  position: absolute;
+  top: -20px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-preview-container {
+  background: var(--secondary-bg);
+  border-radius: 12px;
+  max-width: 90vw;
+  max-height: 100vh;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  animation: modalFadeIn 0.3s ease-out;
+}
+
+.image-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: var(--bg-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.image-preview-title {
+  color: var(--text-color);
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.image-preview-close {
+  background: none;
+  border: none;
+  color: var(--text-color);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.image-preview-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.image-preview-content {
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 70vh;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+.image-preview-actions {
+  padding: 16px 20px;
+  background: var(--bg-color);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: center;
+}
+
+.preview-download-btn {
+  background: var(--accent-color);
+  border: none;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.preview-download-btn:hover {
+  background: rgba(18, 140, 126, 0.8);
+  transform: translateY(-1px);
+}
+
+@keyframes modalFadeIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .document-message {
@@ -257,5 +433,28 @@
 }
 
 .document-download-btn svg {
+  font-size: 16px;
+}
+
+.download-button {
+  background: var(--accent-color);
+  border: none;
+  color: white;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.download-button:hover {
+  background: rgba(18, 140, 126, 0.8);
+  transform: scale(1.05);
+}
+
+.download-button svg {
   font-size: 16px;
 }
