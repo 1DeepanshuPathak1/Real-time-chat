@@ -1,666 +1,146 @@
 import { getFirestore } from 'firebase/firestore';
-import { API_BASE_URL } from '../config/api';
+import messageService from './Comps/messageService';
+import cacheService from './Comps/cacheService';
+import compressionService from './Comps/compressionService';
 
 const db = getFirestore();
 
 class ChunkedMessageService {
     constructor() {
-        this.cache = new Map();
+        this.messageService = messageService;
+        this.cacheService = cacheService;
+        this.compressionService = compressionService;
         this.messagesPerChunk = 50;
-        this.cacheTimeout = 300000;
+        
+        this.cacheService.startCleanup();
     }
 
     decompressLZW(compressed) {
-        try {
-            if (!compressed || typeof compressed !== 'string') {
-                return compressed;
-            }
-
-            const binaryString = atob(compressed);
-            const uint8Array = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                uint8Array[i] = binaryString.charCodeAt(i);
-            }
-            
-            const codes = Array.from(uint8Array);
-            const dict = new Map();
-            let dictSize = 256;
-            let result = '';
-            
-            if (codes.length === 0) return compressed;
-            
-            let w = String.fromCharCode(codes[0]);
-            result += w;
-            
-            for (let i = 0; i < 256; i++) {
-                dict.set(i, String.fromCharCode(i));
-            }
-            
-            for (let i = 1; i < codes.length; i++) {
-                const k = codes[i];
-                let entry;
-                
-                if (dict.has(k)) {
-                    entry = dict.get(k);
-                } else if (k === dictSize) {
-                    entry = w + w[0];
-                } else {
-                    console.warn('Invalid compression code:', k);
-                    return compressed;
-                }
-                
-                result += entry;
-                dict.set(dictSize++, w + entry[0]);
-                w = entry;
-            }
-            
-            const resultBytes = Array.from(result, c => c.charCodeAt(0));
-            const resultBinary = String.fromCharCode(...resultBytes);
-            return atob(resultBinary);
-        } catch (error) {
-            console.error('Decompression failed:', error);
-            return compressed;
-        }
+        return this.compressionService.decompressLZW(compressed);
     }
 
     compressLZW(data) {
-        try {
-            const dict = new Map();
-            let dictSize = 256;
-            const result = [];
-            let w = '';
-            
-            for (let i = 0; i < 256; i++) {
-                dict.set(String.fromCharCode(i), i);
-            }
-            
-            for (let i = 0; i < data.length; i++) {
-                const c = data[i];
-                const wc = w + c;
-                
-                if (dict.has(wc)) {
-                    w = wc;
-                } else {
-                    result.push(dict.get(w));
-                    dict.set(wc, dictSize++);
-                    w = c;
-                }
-            }
-            
-            if (w !== '') {
-                result.push(dict.get(w));
-            }
-            
-            const uint8Array = new Uint8Array(result);
-            const binaryString = Array.from(uint8Array, byte => String.fromCharCode(byte)).join('');
-            return btoa(binaryString);
-        } catch (error) {
-            console.error('LZW compression error:', error);
-            return btoa(data);
-        }
+        return this.compressionService.compressLZW(data);
     }
 
     async getLatestMessages(roomId) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/messages/latest/${roomId}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            const formattedMessages = this.formatMessages(data.messages);
-
-            this.cache.set(`${roomId}_latest`, {
-                messages: formattedMessages,
-                chunkId: data.id,
-                hasMore: data.hasMore,
-                timestamp: Date.now()
-            });
-
-            return {
-                messages: formattedMessages,
-                chunkId: data.id,
-                hasMore: data.hasMore
-            };
-        } catch (error) {
-            console.error('Error fetching latest messages:', error);
-            return { messages: [], chunkId: null, hasMore: false };
-        }
+        return await this.messageService.getLatestMessages(roomId);
     }
 
     async getLatestChunk(roomId) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/messages/latest/${roomId}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-
-            return {
-                id: data.id,
-                messages: this.formatMessages(data.messages),
-                hasMore: data.hasMore
-            };
-        } catch (error) {
-            console.error('Error fetching latest chunk:', error);
-            return { id: null, messages: [], hasMore: false };
-        }
+        return await this.messageService.getLatestChunk(roomId);
     }
 
     async getOlderMessages(roomId, currentChunkId) {
-        const cacheKey = `${roomId}_${currentChunkId}`;
-
-        if (this.cache.has(cacheKey)) {
-            const cached = this.cache.get(cacheKey);
-            if (Date.now() - cached.timestamp < this.cacheTimeout) {
-                return cached;
-            }
-        }
-
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/messages/older/${roomId}/${currentChunkId}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-
-            if (!data.messages) {
-                return { messages: [], chunkId: null, hasMore: false };
-            }
-
-            const formattedMessages = this.formatMessages(data.messages);
-
-            const result = {
-                messages: formattedMessages,
-                chunkId: data.id,
-                hasMore: data.hasMore,
-                timestamp: Date.now()
-            };
-
-            this.cache.set(cacheKey, result);
-            return result;
-        } catch (error) {
-            console.error('Error fetching older messages:', error);
-            return { messages: [], chunkId: null, hasMore: false };
-        }
+        return await this.messageService.getOlderMessages(roomId, currentChunkId);
     }
 
     async getPendingMessages(roomId) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/messages/pending/${roomId}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            });
-
-            if (!response.ok) {
-                if (response.status === 429) {
-                    return [];
-                }
-                return [];
-            }
-
-            const data = await response.json();
-            return this.formatMessages(data.messages || []);
-        } catch (error) {
-            console.error('Error fetching pending messages:', error);
-            return [];
-        }
+        return await this.messageService.getPendingMessages(roomId);
     }
 
     async getMessagesFromRedis(roomId) {
-        return await this.getPendingMessages(roomId);
+        return await this.messageService.getMessagesFromRedis(roomId);
     }
 
     async addReactionToMessage(roomId, reactionData) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/messages/react`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    roomId,
-                    ...reactionData
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            return await response.json();
-        } catch (error) {
-            console.error('Error adding reaction to message:', error);
-            throw error;
-        }
+        return await this.messageService.addReactionToMessage(roomId, reactionData);
     }
 
     formatMessages(messages) {
-        return messages.map(msg => {
-            const timestamp = msg.t || msg.timestamp || msg.time || Date.now();
-            let content = msg.c || msg.content;
-
-            return {
-                id: msg.i || msg.id,
-                sender: msg.s || msg.sender,
-                content: content,
-                time: new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                timestamp: timestamp,
-                type: msg.ty || msg.type || 'text',
-                fileName: msg.fn || msg.fileName,
-                fileSize: msg.fs || msg.fileSize,
-                fileType: msg.ft || msg.fileType,
-                fileUrl: msg.fu || msg.fileUrl,
-                originalSize: msg.os || msg.originalSize,
-                compressedSize: msg.cs || msg.compressedSize,
-                replyTo: msg.r || msg.replyTo,
-                em: msg.em
-            };
-        });
+        return this.messageService.formatMessages(messages);
     }
 
     async sendMessage(roomId, messageData) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/messages/send`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    roomId,
-                    ...messageData
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const result = await response.json();
-            return result.messageId;
-        } catch (error) {
-            console.error('Error sending message:', error);
-            throw error;
-        }
+        return await this.messageService.sendMessage(roomId, messageData);
     }
 
     async fetchMessageById(roomId, messageId) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/messages/${roomId}/${messageId}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            return this.formatMessages([data.message])[0];
-        } catch (error) {
-            console.error('Error fetching message by ID:', error);
-            return null;
-        }
+        return await this.messageService.fetchMessageById(roomId, messageId);
     }
 
     async updateMessage(roomId, messageId, updates) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/messages/${roomId}/${messageId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(updates)
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const result = await response.json();
-            return result.success;
-        } catch (error) {
-            console.error('Error updating message:', error);
-            throw error;
-        }
+        return await this.messageService.updateMessage(roomId, messageId, updates);
     }
 
     async deleteMessage(roomId, messageId) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/messages/${roomId}/${messageId}`, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const result = await response.json();
-            return result.success;
-        } catch (error) {
-            console.error('Error deleting message:', error);
-            throw error;
-        }
+        return await this.messageService.deleteMessage(roomId, messageId);
     }
 
     async searchMessages(roomId, query, limit = 50) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/messages/search/${roomId}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    query,
-                    limit
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            return this.formatMessages(data.messages || []);
-        } catch (error) {
-            console.error('Error searching messages:', error);
-            return [];
-        }
+        return await this.messageService.searchMessages(roomId, query, limit);
     }
 
     async getMessagesBetweenDates(roomId, startDate, endDate) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/messages/range/${roomId}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    startDate: startDate.toISOString(),
-                    endDate: endDate.toISOString()
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            return this.formatMessages(data.messages || []);
-        } catch (error) {
-            console.error('Error fetching messages by date range:', error);
-            return [];
-        }
+        return await this.messageService.getMessagesBetweenDates(roomId, startDate, endDate);
     }
 
     async getMessagesByType(roomId, messageType, limit = 50) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/messages/type/${roomId}/${messageType}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                params: new URLSearchParams({ limit: limit.toString() })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            return this.formatMessages(data.messages || []);
-        } catch (error) {
-            console.error('Error fetching messages by type:', error);
-            return [];
-        }
+        return await this.messageService.getMessagesByType(roomId, messageType, limit);
     }
 
     async getUnreadCount(roomId, userId) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/messages/unread-count/${roomId}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                params: new URLSearchParams({ userId })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            return data.count || 0;
-        } catch (error) {
-            console.error('Error fetching unread count:', error);
-            return 0;
-        }
+        return await this.messageService.getUnreadCount(roomId, userId);
     }
 
     async markMessagesRead(roomId, userId, lastReadMessageId) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/messages/mark-read`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    roomId,
-                    userId,
-                    lastReadMessageId
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const result = await response.json();
-            return result.success;
-        } catch (error) {
-            console.error('Error marking messages as read:', error);
-            throw error;
-        }
+        return await this.messageService.markMessagesRead(roomId, userId, lastReadMessageId);
     }
 
     async getMessageReactions(roomId, messageId) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/messages/reactions/${roomId}/${messageId}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            return data.reactions || {};
-        } catch (error) {
-            console.error('Error fetching message reactions:', error);
-            return {};
-        }
+        return await this.messageService.getMessageReactions(roomId, messageId);
     }
 
     async removeReactionFromMessage(roomId, messageId, emoji, userName) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/messages/react`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    roomId,
-                    messageId,
-                    emoji,
-                    userName,
-                    remove: true
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            return await response.json();
-        } catch (error) {
-            console.error('Error removing reaction from message:', error);
-            throw error;
-        }
+        return await this.messageService.removeReactionFromMessage(roomId, messageId, emoji, userName);
     }
 
     async getMessageStats(roomId) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/messages/stats/${roomId}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            return data.stats || {};
-        } catch (error) {
-            console.error('Error fetching message stats:', error);
-            return {};
-        }
+        return await this.messageService.getMessageStats(roomId);
     }
 
     async exportMessages(roomId, format = 'json', startDate = null, endDate = null) {
-        try {
-            const params = new URLSearchParams({ format });
-            if (startDate) params.append('startDate', startDate.toISOString());
-            if (endDate) params.append('endDate', endDate.toISOString());
-
-            const response = await fetch(`${API_BASE_URL}/api/messages/export/${roomId}?${params}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            if (format === 'json') {
-                const data = await response.json();
-                return this.formatMessages(data.messages || []);
-            } else {
-                return await response.blob();
-            }
-        } catch (error) {
-            console.error('Error exporting messages:', error);
-            return format === 'json' ? [] : null;
-        }
+        return await this.messageService.exportMessages(roomId, format, startDate, endDate);
     }
 
     async clearCache(roomId = null) {
-        if (roomId) {
-            const keysToDelete = [];
-            for (const key of this.cache.keys()) {
-                if (key.startsWith(roomId)) {
-                    keysToDelete.push(key);
-                }
-            }
-            keysToDelete.forEach(key => this.cache.delete(key));
-        } else {
-            this.cache.clear();
-        }
+        this.cacheService.clear(roomId);
     }
 
     async preloadMessages(roomId, chunkCount = 3) {
-        try {
-            const chunks = [];
-            for (let i = 1; i <= chunkCount; i++) {
-                const chunkId = `chunk_${i}`;
-                const result = await this.getOlderMessages(roomId, chunkId);
-                if (result.messages.length > 0) {
-                    chunks.push(result);
-                } else {
-                    break;
-                }
-            }
-            return chunks;
-        } catch (error) {
-            console.error('Error preloading messages:', error);
-            return [];
-        }
+        return await this.messageService.preloadMessages(roomId, chunkCount);
     }
 
     getCacheSize() {
-        return this.cache.size;
+        return this.cacheService.getSize();
     }
 
     getCacheKeys() {
-        return Array.from(this.cache.keys());
+        return this.cacheService.getKeys();
     }
 
     isCached(key) {
-        return this.cache.has(key);
+        return this.cacheService.has(key);
     }
 
     getCacheEntry(key) {
-        return this.cache.get(key);
+        return this.cacheService.getEntry(key);
     }
 
     setCacheEntry(key, value) {
-        this.cache.set(key, {
-            ...value,
-            timestamp: Date.now()
-        });
+        this.cacheService.setEntry(key, value);
     }
 
     cleanExpiredCache() {
-        const now = Date.now();
-        for (const [key, value] of this.cache.entries()) {
-            if (now - value.timestamp > this.cacheTimeout) {
-                this.cache.delete(key);
-            }
-        }
+        this.cacheService.cleanExpired();
     }
 
     startCacheCleanup() {
-        setInterval(() => {
-            this.cleanExpiredCache();
-        }, 60000); 
+        this.cacheService.startCleanup();
     }
 
     stopCacheCleanup() {
-        clearInterval(this.cacheCleanupInterval);
+        this.cacheService.stopCleanup();
     }
 }
 
