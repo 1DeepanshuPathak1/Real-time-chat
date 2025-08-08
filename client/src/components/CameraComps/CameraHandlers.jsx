@@ -3,6 +3,7 @@ import chunkedMessageService from '../../services/chunkedMessageService';
 
 export const useCameraHandlers = (setMessages, videoRef, selectedContact, user) => {
   const [stream, setStream] = useState(null);
+  const [capturedImage, setCapturedImage] = useState(null);
 
   const compressImage = (dataUrl) => {
     const canvas = document.createElement('canvas');
@@ -40,6 +41,7 @@ export const useCameraHandlers = (setMessages, videoRef, selectedContact, user) 
         video: { width: 1280, height: 720 }
       });
       setStream(mediaStream);
+      setCapturedImage(null);
       
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
@@ -54,61 +56,65 @@ export const useCameraHandlers = (setMessages, videoRef, selectedContact, user) 
   };
 
   const captureImage = async () => {
-    if (videoRef.current && selectedContact && user) {
+    if (videoRef.current) {
       const canvas = document.createElement('canvas');
       canvas.width = videoRef.current.videoWidth;
       canvas.height = videoRef.current.videoHeight;
       canvas.getContext('2d').drawImage(videoRef.current, 0, 0);
-      const originalImageData = canvas.toDataURL('image/jpeg');
+      const imageData = canvas.toDataURL('image/jpeg');
       
-      const compressedImageData = await compressImage(originalImageData);
-      const compressedSize = new Blob([compressedImageData]).size;
-      const originalSize = new Blob([originalImageData]).size;
-
-      if (compressedSize > 1024 * 1024) {
-        alert('Image too large even after compression. Please try again.');
-        return false;
-      }
-
-      const messageData = {
-        sender: user.email,
-        content: compressedImageData,
-        type: 'image',
-        fileName: `camera_capture_${Date.now()}.jpg`,
-        fileSize: compressedSize,
-        fileType: 'image/jpeg',
-        originalSize: originalSize,
-        compressedSize: compressedSize
-      };
-
-      try {
-        const messageId = await chunkedMessageService.sendMessage(selectedContact.roomID, messageData);
-
-        const newMessage = {
-          id: messageId,
-          sender: user.email,
-          content: compressedImageData,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          timestamp: Date.now(),
-          type: 'image',
-          fileName: messageData.fileName,
-          fileSize: compressedSize,
-          originalSize: originalSize
-        };
-        
-        setMessages(prev => [...prev, newMessage]);
-
-        if (stream) {
-          stream.getTracks().forEach(track => track.stop());
-        }
-        
-        return true;
-      } catch (error) {
-        console.error('Error saving captured image:', error);
-        return false;
-      }
+      const compressedImageData = await compressImage(imageData);
+      setCapturedImage(compressedImageData);
+      return compressedImageData;
     }
-    return false;
+    return null;
+  };
+
+  const confirmSendImage = async () => {
+    if (!capturedImage || !selectedContact || !user) return false;
+
+    const compressedSize = new Blob([capturedImage]).size;
+
+    if (compressedSize > 1024 * 1024) {
+      alert('Image too large even after compression. Please try again.');
+      return false;
+    }
+
+    const messageData = {
+      sender: user.email,
+      content: capturedImage,
+      type: 'image',
+      fileName: `camera_capture_${Date.now()}.jpg`,
+      fileSize: compressedSize,
+      fileType: 'image/jpeg'
+    };
+
+    try {
+      const messageId = await chunkedMessageService.sendMessage(selectedContact.roomID, messageData);
+
+      const newMessage = {
+        id: messageId,
+        sender: user.email,
+        content: capturedImage,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: Date.now(),
+        type: 'image',
+        fileName: messageData.fileName,
+        fileSize: compressedSize
+      };
+      
+      setMessages(prev => [...prev, newMessage]);
+      setCapturedImage(null);
+      
+      return true;
+    } catch (error) {
+      console.error('Error saving captured image:', error);
+      return false;
+    }
+  };
+
+  const cancelCapture = () => {
+    setCapturedImage(null);
   };
 
   const stopCamera = () => {
@@ -116,7 +122,16 @@ export const useCameraHandlers = (setMessages, videoRef, selectedContact, user) 
       stream.getTracks().forEach(track => track.stop());
       setStream(null);
     }
+    setCapturedImage(null);
   };
 
-  return { startCamera, captureImage, stopCamera, stream };
+  return { 
+    startCamera, 
+    captureImage, 
+    confirmSendImage, 
+    cancelCapture, 
+    stopCamera, 
+    stream, 
+    capturedImage 
+  };
 };

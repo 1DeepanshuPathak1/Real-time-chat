@@ -91,6 +91,22 @@ body {
 .camera-preview {
   max-width: 100%;
   max-height: 80vh;
+  border-radius: 12px;
+}
+
+.image-preview-containers {
+  width: 100%;
+  height: 80vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.captured-image-preview {
+  max-width: 90%;
+  max-height: 90%;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
 .camera-controls {
@@ -101,36 +117,85 @@ body {
   align-items: center;
 }
 
+.confirmation-controls {
+  gap: 40px;
+}
+
 .capture-button {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  background-color: var(--accent-color);
+  border: 3px solid #ffffff;
+  color: white;
+  font-size: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.capture-button:hover {
+  transform: scale(1.1);
+  background-color: #0f7a6b;
+}
+
+.confirm-button {
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background-color: var(--accent-color);
-  border: none;
+  background-color: #10b981;
+  border: 2px solid #ffffff;
   color: white;
   font-size: 24px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.2s ease;
 }
 
-.capture-button:hover {
+.confirm-button:hover {
   transform: scale(1.1);
+  background-color: #059669;
+}
+
+.cancel-button {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background-color: #ef4444;
+  border: 2px solid #ffffff;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.cancel-button:hover {
+  transform: scale(1.1);
+  background-color: #dc2626;
 }
 
 .close-camera-button {
-  padding: 8px 16px;
-  border: none;
-  background-color: #666;
+  padding: 12px 20px;
+  border: 2px solid #ffffff;
+  background-color: transparent;
   color: white;
-  border-radius: 8px;
+  border-radius: 25px;
   cursor: pointer;
   font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
 }
 
 .close-camera-button:hover {
-  background-color: #555;
+  background-color: rgba(255, 255, 255, 0.1);
+  transform: scale(1.05);
 }
 
 .loading-container {
@@ -259,10 +324,6 @@ body {
 .messages-container::-webkit-scrollbar-thumb {
   background: rgba(18, 140, 126, 0.3);
   border-radius: 3px;
-}
-
-.messages-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(18, 140, 126, 0.5);
 }
 
 .messages-container::-webkit-scrollbar-thumb:hover {

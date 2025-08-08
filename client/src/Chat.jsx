@@ -71,7 +71,16 @@ function ChatContent() {
     onMessageReceived,
   } = useSocket();
 
-  const { startCamera, captureImage, stopCamera, stream } = useCameraHandlers(setMessages, videoRef, selectedContact);
+  const { 
+    startCamera, 
+    captureImage, 
+    confirmSendImage, 
+    cancelCapture, 
+    stopCamera, 
+    stream, 
+    capturedImage 
+  } = useCameraHandlers(setMessages, videoRef, selectedContact, user);
+
   const { handleSendMessage, handleFileUpload } = useMessageHandlers(setMessages, socket, selectedContact, user);
 
   useEffect(() => {
@@ -422,6 +431,26 @@ function ChatContent() {
     setReplyTo(null);
   };
 
+  const handleCameraConfirm = async () => {
+    const success = await confirmSendImage();
+    if (success) {
+      setShowCamera(false);
+      stopCamera();
+      if (selectedContact) {
+        moveContactToTop(selectedContact.roomID);
+      }
+    }
+  };
+
+  const handleCameraCancel = () => {
+    cancelCapture();
+  };
+
+  const handleCameraClose = () => {
+    stopCamera();
+    setShowCamera(false);
+  };
+
   if (loading) {
     return (
       <div className="loading-container">
@@ -488,12 +517,12 @@ function ChatContent() {
               {showCamera && (
                 <CameraOverlay
                   videoRef={videoRef}
-                  onCapture={() => captureImage(selectedContact)}
-                  onClose={() => {
-                    stopCamera();
-                    setShowCamera(false);
-                  }}
+                  onCapture={captureImage}
+                  onConfirm={handleCameraConfirm}
+                  onCancel={handleCameraCancel}
+                  onClose={handleCameraClose}
                   stream={stream}
+                  capturedImage={capturedImage}
                 />
               )}
               {replyTo && (

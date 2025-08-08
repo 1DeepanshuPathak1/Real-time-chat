@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import { FiSend, FiMic, FiSmile, FiPaperclip, FiImage, FiCamera, FiFile } from 'react-icons/fi';
 import './css/MessageInput.css'; 
 
@@ -18,6 +18,7 @@ export const MessageInput = ({
   autoFocus = false
 }) => {
   const inputRef = useRef(null);
+  const attachMenuRef = useRef(null);
 
   useEffect(() => {
     if (autoFocus && inputRef.current) {
@@ -38,6 +39,21 @@ export const MessageInput = ({
       }
     };
   }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showAttachMenu && attachMenuRef.current && !attachMenuRef.current.contains(event.target)) {
+        setShowAttachMenu(false);
+      }
+    };
+
+    if (showAttachMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [showAttachMenu, setShowAttachMenu]);
 
   return (
     <form onSubmit={onSubmit} className="message-input-container">
@@ -64,16 +80,25 @@ export const MessageInput = ({
         <FiPaperclip />
       </button>
       {showAttachMenu && (
-        <div className="attach-menu" onClick={(e) => e.stopPropagation()}>
-          <button onClick={() => fileInputRef.current?.click()}>
+        <div ref={attachMenuRef} className="attach-menu" onClick={(e) => e.stopPropagation()}>
+          <button onClick={() => {
+            fileInputRef.current?.click();
+            setShowAttachMenu(false);
+          }}>
             <FiImage />
             <span>Photos & videos</span>
           </button>
-          <button onClick={startCamera}>
+          <button onClick={() => {
+            startCamera();
+            setShowAttachMenu(false);
+          }}>
             <FiCamera />
             <span>Camera</span>
           </button>
-          <button onClick={() => documentInputRef.current?.click()}>
+          <button onClick={() => {
+            documentInputRef.current?.click();
+            setShowAttachMenu(false);
+          }}>
             <FiFile />
             <span>Document</span>
           </button>
