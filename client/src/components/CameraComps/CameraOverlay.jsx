@@ -37,7 +37,7 @@ export const CameraOverlay = ({
             <img src={capturedImage} alt="Captured" className="captured-image-preview" />
           </div>
           <div className="camera-controls confirmation-controls">
-            <button onClick={onCancel} className="cancel-button">
+            <button onClick={onCancel} className="cancel-buttons">
               <FiX />
             </button>
             <button onClick={onConfirm} className="confirm-button">

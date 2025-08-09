@@ -161,7 +161,7 @@ body {
   background-color: #059669;
 }
 
-.cancel-button {
+.cancel-buttons {
   width: 60px;
   height: 60px;
   border-radius: 50%;
@@ -176,7 +176,7 @@ body {
   transition: all 0.2s ease;
 }
 
-.cancel-button:hover {
+.cancel-buttons:hover {
   transform: scale(1.1);
   background-color: #dc2626;
 }

@@ -61,7 +61,7 @@
 .replied-message-display {
   display: flex;
   align-items: stretch;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--secondary-bg);
   border: 1px solid var(--border-color);
   border-radius: 6px;
   margin-bottom: 8px;
@@ -70,9 +70,17 @@
   transition: all 0.2s ease;
 }
 
-.replied-message-display:hover {
-  background: rgba(255, 255, 255, 0.08);
+.dark .replied-message-display:hover {
+  background: rgba(0, 0, 0, 0.651);
   transform: translateY(-1px);
+}
+
+.light .replied-message-display:hover {
+  background-color: rgba(9, 118, 213, 0.404);
+}
+
+.light .replied-message-display:hover .replied-to-name {
+  color: blue;
 }
 
 .reply-indicator-small {
