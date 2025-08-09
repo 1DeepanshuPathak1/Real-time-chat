@@ -2,6 +2,23 @@ import { useState, useEffect } from 'react';
 import { useSocket } from '../../services/SocketService';
 import './css/MessageStatus.css';
 
+export const isMessageRead = (message, currentUserEmail, lastReadMessageId, messages) => {
+  if (message.sender === currentUserEmail) {
+    if (!lastReadMessageId) return false;
+    
+    const messageIndex = messages.findIndex(msg => msg.id === message.id);
+    const lastReadIndex = messages.findIndex(msg => msg.id === lastReadMessageId);
+    
+    return lastReadIndex >= messageIndex;
+  }
+  return true;
+};
+
+export const getUnreadCount = (messages, firstUnreadIndex, currentUserEmail) => {
+  if (firstUnreadIndex === -1) return 0;
+  return messages.slice(firstUnreadIndex).filter(msg => msg.sender !== currentUserEmail).length;
+};
+
 export const MessageStatusIndicator = ({ message, currentUser, selectedContact }) => {
   const [status, setStatus] = useState('sent');
   const { socket } = useSocket();

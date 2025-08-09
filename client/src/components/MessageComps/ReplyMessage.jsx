@@ -27,7 +27,26 @@ export const ReplyMessage = ({ replyTo, onCancel }) => {
   );
 };
 
-export const ReplyMessageDisplay = ({ replyTo, currentUserEmail }) => {
+export const scrollToMessage = (messageId) => {
+  const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+  if (messageElement) {
+    messageElement.scrollIntoView({ 
+      behavior: 'smooth', 
+      block: 'center' 
+    });
+    
+    messageElement.classList.add('message-highlight');
+    setTimeout(() => {
+      messageElement.classList.remove('message-highlight');
+    }, 2000);
+  }
+};
+
+export const findReplyToMessage = (messages, replyToId) => {
+  return messages.find(msg => msg.id === replyToId);
+};
+
+export const ReplyMessageDisplay = ({ replyTo, currentUserEmail, messages }) => {
   if (!replyTo) return null;
 
   const truncateText = (text, maxLength = 40) => {
@@ -35,8 +54,14 @@ export const ReplyMessageDisplay = ({ replyTo, currentUserEmail }) => {
     return text.substring(0, maxLength) + '...';
   };
 
+  const handleReplyClick = () => {
+    if (replyTo.id) {
+      scrollToMessage(replyTo.id);
+    }
+  };
+
   return (
-    <div className="replied-message-display">
+    <div className="replied-message-display" onClick={handleReplyClick} style={{ cursor: 'pointer' }}>
       <div className="reply-indicator-small"></div>
       <div className="replied-content">
         <div className="replied-to-name">

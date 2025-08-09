@@ -103,6 +103,34 @@
   line-height: 1.2;
 }
 
+.message-highlight {
+  animation: highlightPulse 2s ease-in-out;
+}
+
+@keyframes highlightPulse {
+  0%, 100% {
+    background-color: transparent;
+    transform: scale(1);
+  }
+  50% {
+    background-color: rgba(59, 130, 246, 0.2);
+    transform: scale(1.02);
+  }
+}
+
+.copied-flash {
+  animation: copyFlash 2s ease-in-out;
+}
+
+@keyframes copyFlash {
+  0%, 100% {
+    background-color: transparent;
+  }
+  50% {
+    background-color: rgba(34, 197, 94, 0.3);
+  }
+}
+
 @keyframes replySlideIn {
   0% {
     opacity: 0;

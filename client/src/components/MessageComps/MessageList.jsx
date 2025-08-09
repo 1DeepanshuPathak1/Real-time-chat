@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { FiFile, FiDownload, FiEye, FiX } from 'react-icons/fi';
-import { MessageStatusIndicator } from './MessageStatus';
+import { FiX, FiDownload } from 'react-icons/fi';
+import { MessageStatusIndicator, isMessageRead, getUnreadCount } from './MessageStatus';
 import { MessageContextMenu } from './MessageContextMenu';
 import { MessageInfoModal } from './MessageInfoModal';
-import { ReplyMessageDisplay } from './ReplyMessage';
+import { ReplyMessageDisplay, findReplyToMessage } from './ReplyMessage';
+import { MessageContent } from './MessageContent';
+import { useImagePreview } from './MessageUtils';
+import { MessageReactions, useMessageReactions } from './MessageReactions';
 import { getFirestore, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { useSocket } from '../../services/SocketService';
-import chunkedMessageService from '../../services/chunkedMessageService';
-import './css/MessageReactions.css';
 import './css/MessageList.css'
 
 const db = getFirestore();
@@ -16,63 +17,9 @@ export const MessageList = ({ messages, messagesEndRef, currentUserEmail, select
   const { socket } = useSocket();
   const lastReadMessageId = useRef(null);
   const hasScrolledToUnread = useRef(false);
-  const [contextMenu, setContextMenu] = useState({ show: false, position: { x: 0, y: 0 }, message: null });
-  const [showMessageInfo, setShowMessageInfo] = useState(false);
-  const [selectedMessage, setSelectedMessage] = useState(null);
-  const [showMessages, setMessages] = useState(messages || []);
-  const [copiedMessageId, setCopiedMessageId] = useState(null);
   const [messageReactions, setMessageReactions] = useState({});
-  const [imagePreview, setImagePreview] = useState({ show: false, src: '', fileName: '' });
-
-  const downloadDocument = async (message) => {
-    try {
-      let downloadData;
-      let fileName = message.fileName || 'document';
-      
-      if (message.content.startsWith('data:')) {
-        downloadData = message.content;
-      } else {
-        const blob = new Blob([message.content], { type: message.fileType || 'application/octet-stream' });
-        downloadData = URL.createObjectURL(blob);
-      }
-      
-      const link = document.createElement('a');
-      link.href = downloadData;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      if (!message.content.startsWith('data:')) {
-        URL.revokeObjectURL(downloadData);
-      }
-    } catch (error) {
-      console.error('Error downloading document:', error);
-      alert('Failed to download document');
-    }
-  };
-
-  const downloadImage = async (message) => {
-    try {
-      const link = document.createElement('a');
-      link.href = message.content;
-      link.download = message.fileName || `image_${Date.now()}.jpg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (error) {
-      console.error('Error downloading image:', error);
-      alert('Failed to download image');
-    }
-  };
-
-  const previewImage = (src, fileName) => {
-    setImagePreview({ show: true, src, fileName });
-  };
-
-  const closeImagePreview = () => {
-    setImagePreview({ show: false, src: '', fileName: '' });
-  };
+  const { imagePreview, previewImage, closeImagePreview } = useImagePreview();
+  const { handleReactionClick } = useMessageReactions(messageReactions, setMessageReactions, selectedContact, user, socket);
 
   useEffect(() => {
     const fetchLastReadMessageId = async () => {
@@ -177,73 +124,30 @@ export const MessageList = ({ messages, messagesEndRef, currentUserEmail, select
   }, [messages, user, selectedContact, socket, currentUserEmail]);
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (contextMenu.show && !event.target.closest('.message-context-menu') && !event.target.closest('.context-emoji-picker')) {
-        handleCloseContextMenu();
-      }
-      if (imagePreview.show && !event.target.closest('.image-preview-modal')) {
-        closeImagePreview();
-      }
-    };
-
-    const handleEscapeKey = (event) => {
-      if (event.key === 'Escape') {
-        handleCloseContextMenu();
-        setShowMessageInfo(false);
-        closeImagePreview();
-      }
-    };
-
-    if (contextMenu.show || showMessageInfo || imagePreview.show) {
-      document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('keydown', handleEscapeKey);
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-        document.removeEventListener('keydown', handleEscapeKey);
-      };
-    }
-  }, [contextMenu.show, showMessageInfo, imagePreview.show]);
-
-  useEffect(() => {
     if (socket) {
       const handleReceivedMessage = (data) => {
         if (data.roomID === selectedContact?.roomID) {
-          setMessages(prevMessages => {
-            const existingMessageIndex = prevMessages.findIndex(msg => msg.id === data.messageId);
-            
-            if (existingMessageIndex !== -1) {
-              return prevMessages.map((msg, index) => 
-                index === existingMessageIndex 
-                  ? { 
-                      ...msg, 
-                      content: data.message,
-                      fileName: data.fileName || msg.fileName,
-                      fileSize: data.fileSize || msg.fileSize,
-                      fileType: data.fileType || msg.fileType,
-                      originalSize: data.originalSize || msg.originalSize
-                    }
-                  : msg
-              );
-            }
+          const existingMessageIndex = messages.findIndex(msg => msg.id === data.messageId);
+          
+          if (existingMessageIndex !== -1) {
+            return;
+          }
 
-            const newMessage = {
-              id: data.messageId,
-              sender: data.sender,
-              content: data.message,
-              time: new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              timestamp: data.timestamp,
-              type: data.type || 'text',
-              fileName: data.fileName,
-              fileSize: data.fileSize,
-              fileType: data.fileType,
-              originalSize: data.originalSize,
-              isDelivered: true,
-              isRead: false,
-              ...(data.replyTo && { replyTo: data.replyTo })
-            };
-
-            return [...prevMessages, newMessage];
-          });
+          const newMessage = {
+            id: data.messageId,
+            sender: data.sender,
+            content: data.message,
+            time: new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            timestamp: data.timestamp,
+            type: data.type || 'text',
+            fileName: data.fileName,
+            fileSize: data.fileSize,
+            fileType: data.fileType,
+            originalSize: data.originalSize,
+            isDelivered: true,
+            isRead: false,
+            ...(data.replyTo && { replyTo: data.replyTo })
+          };
         }
       };
 
@@ -264,236 +168,7 @@ export const MessageList = ({ messages, messagesEndRef, currentUserEmail, select
         socket.off('reaction-updated', handleReactionUpdate);
       };
     }
-  }, [socket, selectedContact, setMessages]);
-
-  const handleContextMenu = (e, message) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const rect = e.currentTarget.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const menuWidth = 200;
-    const menuHeight = 200;
-    
-    let x = e.clientX;
-    let y = e.clientY;
-    
-    if (x + menuWidth > viewportWidth) {
-      x = viewportWidth - menuWidth - 10;
-    }
-    
-    if (y + menuHeight > viewportHeight) {
-      y = viewportHeight - menuHeight - 10;
-    }
-    
-    setContextMenu({
-      show: true,
-      position: { x, y },
-      message
-    });
-  };
-
-  const handleCloseContextMenu = () => {
-    setContextMenu({ show: false, position: { x: 0, y: 0 }, message: null });
-  };
-
-  const handleReply = (message) => {
-    if (onReply && message) {
-      onReply(message);
-      setTimeout(() => {
-        const messageInput = document.querySelector('.message-input');
-        if (messageInput) {
-          messageInput.focus();
-        }
-      }, 100);
-    }
-  };
-
-  const handleShowInfo = (message) => {
-    if (message) {
-      setSelectedMessage(message);
-      setShowMessageInfo(true);
-    }
-  };
-
-  const isMessageRead = (message) => {
-    if (message.sender === currentUserEmail) {
-      if (!lastReadMessageId.current) return false;
-      
-      const messageIndex = messages.findIndex(msg => msg.id === message.id);
-      const lastReadIndex = messages.findIndex(msg => msg.id === lastReadMessageId.current);
-      
-      return lastReadIndex >= messageIndex;
-    }
-    return true;
-  };
-
-  const getUnreadCount = () => {
-    if (firstUnreadIndex === -1) return 0;
-    return messages.slice(firstUnreadIndex).filter(msg => msg.sender !== currentUserEmail).length;
-  };
-
-  const findReplyToMessage = (replyToId) => {
-    return messages.find(msg => msg.id === replyToId);
-  };
-
-  const renderReactions = (message) => {
-    const reactions = messageReactions[message.id];
-    
-    if (!reactions || Object.keys(reactions).length === 0) return null;
-
-    const reactionElements = Object.entries(reactions).map(([emoji, users], index) => {
-      if (!users || users.length === 0) return null;
-
-      const isOwn = users.includes(user.displayName || user.email);
-      const count = users.length;
-      const formatUserName = (userIdentifier) => {
-        if (userIdentifier === (user.displayName || user.email)) {
-          return 'You';
-        }
-        
-        const contact = contacts?.find(c => c.email === userIdentifier);
-        if (contact) {
-          return contact.name;
-        }
-        
-        if (userIdentifier === selectedContact?.email) {
-          return selectedContact.name;
-        }
-        
-        return userIdentifier;
-      };
-
-      const tooltipText = count === 1 
-        ? `${formatUserName(users[0])} reacted with ${emoji}`
-        : users.length === 2
-          ? `${users.map(formatUserName).join(' and ')} reacted with ${emoji}`
-          : `${users.slice(0, -1).map(formatUserName).join(', ')} and ${formatUserName(users[users.length - 1])} reacted with ${emoji}`;
-
-      return (
-        <div 
-          key={`${emoji}-${index}`}
-          className={`message-reaction ${isOwn ? 'own-reaction' : 'other-reaction'} ${isDark ? 'dark-theme' : 'light-theme'}`}
-          onClick={() => isOwn && handleReactionClick(message, emoji)}
-          title={tooltipText}
-          style={{ cursor: isOwn ? 'pointer' : 'default' }}
-        >
-          <span className="reaction-emoji">{emoji}</span>
-          {count > 1 && <span className="reaction-count">{count}</span>}
-        </div>
-      );
-    }).filter(Boolean);
-
-    if (reactionElements.length === 0) return null;
-
-    return (
-      <div className="message-reactions-container">
-        {reactionElements}
-      </div>
-    );
-  };
-
-  const handleReactionClick = async (message, emoji) => {
-    if (!message || !emoji || !selectedContact || !user) return;
-
-    const currentReactions = messageReactions[message.id] || {};
-    const users = currentReactions[emoji] || [];
-    const userName = user.displayName || user.email;
-    
-    if (!users.includes(userName)) return;
-
-    const newUsers = users.filter(u => u !== userName);
-    const newReactions = { ...currentReactions };
-    
-    if (newUsers.length === 0) {
-      delete newReactions[emoji];
-    } else {
-      newReactions[emoji] = newUsers;
-    }
-
-    setMessageReactions(prev => ({
-      ...prev,
-      [message.id]: newReactions
-    }));
-
-    try {
-      const messageData = {
-        messageId: message.id,
-        emoji: emoji,
-        userName: userName,
-        remove: true
-      };
-
-      await chunkedMessageService.addReactionToMessage(selectedContact.roomID, messageData);
-
-      if (socket) {
-        socket.emit('message-reaction', {
-          roomId: selectedContact.roomID,
-          messageId: message.id,
-          reactions: newReactions,
-          userName: userName
-        });
-      }
-
-    } catch (error) {
-      console.error('Error removing emoji reaction:', error);
-      setMessageReactions(prev => ({
-        ...prev,
-        [message.id]: currentReactions
-      }));
-    }
-  };
-
-  const renderMessageContent = (message) => {
-    if (message.type === 'image') {
-      return (
-        <div className="image-message-container">
-          <img src={message.content} alt="Shared" className="shared-image" />
-          <div className="image-actions">
-            <button 
-              className="image-action-btn preview-btn"
-              onClick={() => previewImage(message.content, message.fileName)}
-              title="Preview image"
-            >
-              <FiEye />
-            </button>
-            <button 
-              className="image-action-btn download-btn"
-              onClick={() => downloadImage(message)}
-              title="Download image"
-            >
-              <FiDownload />
-            </button>
-          </div>
-        </div>
-      );
-    } else if (message.type === 'document') {
-      const displaySize = message.fileSize || message.originalSize;
-      return (
-        <div className="document-message">
-          <div className="document-info">
-            <FiFile className="document-icon" />
-            <div className="document-details">
-              <span className="document-name">{message.fileName || 'Document'}</span>
-              <span className="document-size">
-                {displaySize ? `${(displaySize / 1024).toFixed(1)}KB` : 'Unknown size'}
-              </span>
-            </div>
-          </div>
-          <button 
-            className="download-button"
-            onClick={() => downloadDocument(message)}
-            title="Download document"
-          >
-            <FiDownload />
-          </button>
-        </div>
-      );
-    } else {
-      return <p>{typeof message.content === 'string' ? message.content : JSON.stringify(message.content)}</p>;
-    }
-  };
+  }, [socket, selectedContact, messages]);
 
   if (!messages || messages.length === 0) {
     return (
@@ -526,7 +201,7 @@ export const MessageList = ({ messages, messagesEndRef, currentUserEmail, select
           {index === firstUnreadIndex && firstUnreadIndex !== -1 && (
             <div className="unread-messages-divider">
               <div className="unread-line"></div>
-              <span className="unread-text">{getUnreadCount()} unread messages</span>
+              <span className="unread-text">{getUnreadCount(messages, firstUnreadIndex, currentUserEmail)} unread messages</span>
               <div className="unread-line"></div>
             </div>
           )}
@@ -534,33 +209,39 @@ export const MessageList = ({ messages, messagesEndRef, currentUserEmail, select
             className={`message ${message.sender === currentUserEmail ? 'sent' : 'received'} ${message.isSending ? 'sending' : ''} ${message.hasError ? 'error' : ''}`}
             data-message-id={message.id}
           >
-            <div 
-              className={`message-content ${message.type === 'image' ? 'image-message' : ''} ${message.type === 'document' ? 'document-message-container' : ''} ${copiedMessageId === message.id ? 'copied-flash' : ''}`}
-              onContextMenu={(e) => handleContextMenu(e, message)}
-            >
+            <div className={`message-content ${message.type === 'image' ? 'image-message' : ''} ${message.type === 'document' ? 'document-message-container' : ''}`}>
               {message.replyTo && (
                 <ReplyMessageDisplay 
-                  replyTo={findReplyToMessage(message.replyTo) || { 
+                  replyTo={findReplyToMessage(messages, message.replyTo) || { 
                     id: message.replyTo, 
                     content: 'Message not found', 
                     sender: 'Unknown' 
                   }} 
                   currentUserEmail={currentUserEmail}
+                  messages={messages}
                 />
               )}
-              {renderMessageContent(message)}
+              <MessageContent message={message} onPreviewImage={previewImage} />
               <div className="message-meta">
                 <span className="message-time">{message.time}</span>
                 <MessageStatusIndicator 
                   message={{
                     ...message,
-                    isRead: isMessageRead(message)
+                    isRead: isMessageRead(message, currentUserEmail, lastReadMessageId.current, messages)
                   }}
                   currentUser={user}
                   selectedContact={selectedContact}
                 />
               </div>
-              {renderReactions(message)}
+              {<MessageReactions 
+                message={message} 
+                messageReactions={messageReactions} 
+                user={user} 
+                contacts={contacts} 
+                selectedContact={selectedContact} 
+                isDark={isDark} 
+                onReactionClick={handleReactionClick} 
+              />}
             </div>
           </div>
         </div>
@@ -599,30 +280,15 @@ export const MessageList = ({ messages, messagesEndRef, currentUserEmail, select
       )}
       
       <MessageContextMenu
-        show={contextMenu.show}
-        position={contextMenu.position}
-        message={contextMenu.message}
-        onClose={handleCloseContextMenu}
-        onReply={handleReply}
-        onShowInfo={handleShowInfo}
-        onCopy={() => {}}
-        onEmojiReact={() => {}}
-        isDark={isDark}
+        messages={messages}
         selectedContact={selectedContact}
         user={user}
         messageReactions={messageReactions}
         setMessageReactions={setMessageReactions}
-        setCopiedMessageId={setCopiedMessageId}
-      />
-      
-      <MessageInfoModal
-        show={showMessageInfo}
-        message={selectedMessage}
-        onClose={() => {
-          setShowMessageInfo(false);
-          setSelectedMessage(null);
-        }}
-        currentUser={user}
+        contacts={contacts}
+        isDark={isDark}
+        onReply={onReply}
+        socket={socket}
       />
     </div>
   );
