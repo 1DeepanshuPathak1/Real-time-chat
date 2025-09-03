@@ -1,7 +1,7 @@
 const Redis = require('redis');
 
 const client = Redis.createClient({
-    url: 'redis://default:kKmEmIOdgSXYddpHNFzRSOoMbfbbgnKf@caboose.proxy.rlwy.net:22361'
+    url: process.env.REDIS_URL
 });
 
 client.on('error', (err) => console.error('Redis Client Error', err));
