@@ -173,6 +173,7 @@
     z-index: 100 !important;
     display: flex !important;
     visibility: visible !important;
+    padding-right: 0px !important;
   }
 
   .reply-message-container {
@@ -207,7 +208,16 @@
     min-height: 0;
   }
 
-  .emoji-button, .attach-button {
+  .emoji-button {
+    margin-left: -5px;
+    margin-right: -2px;
+  }
+
+  .attach-button {
+    margin-left: 0;
+  }
+
+  .mic-button {
     margin: 0;
   }
 
