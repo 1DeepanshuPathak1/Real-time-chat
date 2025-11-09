@@ -12,7 +12,8 @@ const configureServer = () => {
         'http://localhost:5173',
         'http://localhost:3000',
         'https://real-time-chat-olive-five.vercel.app',
-        'https://www.growhaven.xyz'
+        'https://www.growhaven.xyz',
+        'https://w40kh6r6-5173.inc1.devtunnels.ms'
     ];
 
     if (process.env.FRONTEND_URL) {
