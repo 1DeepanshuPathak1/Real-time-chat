@@ -85,7 +85,7 @@ export const MessageInfoModal = ({ show, message, onClose, currentUser }) => {
 
   return (
     <div className="message-info-overlay" onClick={onClose}>
-      <div className="message-info-modal" onClick={(e) => e.stopPropagation()}>
+      <div className={`message-info-modal ${message?.type === 'image' || message?.type === 'document' ? 'has-image' : ''}`} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Message Info</h3>
           <button className="close-button" onClick={onClose}>
