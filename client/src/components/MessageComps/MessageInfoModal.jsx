@@ -1,7 +1,28 @@
 import { FiX, FiCheck, FiCheckCircle, FiClock, FiFile } from 'react-icons/fi';
 import './css/MessageInfoModal.css';
 
+import { useState, useEffect } from 'react';
+
 export const MessageInfoModal = ({ show, message, onClose, currentUser }) => {
+  const [previousScroll, setPreviousScroll] = useState(0);
+  const isImage = message?.type === 'image';
+
+  useEffect(() => {
+    if (show && message) {
+      const messageElement = document.querySelector(`[data-message-id="${message.id}"]`);
+      const inputContainer = document.querySelector('.message-input-container');
+      const chatContainer = document.querySelector('.messages-scroll');
+      
+      if (messageElement && inputContainer) {
+        const messageRect = messageElement.getBoundingClientRect();
+        const inputHeight = inputContainer.offsetHeight;
+        
+        document.documentElement.style.setProperty('--top-offset', `${messageRect.bottom}px`);
+        document.documentElement.style.setProperty('--input-height', `${inputHeight}px`);
+      }
+    }
+  }, [show, message]);
+
   if (!show || !message) return null;
 
   const formatTime = (timestamp) => {

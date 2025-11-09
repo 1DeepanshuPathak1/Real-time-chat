@@ -58,6 +58,28 @@ body {
   overflow: hidden;
 }
 
+.messages-container::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+.messages-container::-webkit-scrollbar-thumb {
+  display: none !important;
+  background: transparent !important;
+}
+
+.messages-container::-webkit-scrollbar-track {
+  display: none !important;
+  background: transparent !important;
+}
+
+.messages-container {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
 .particles-background {
   position: absolute;
   top: 0;
@@ -291,29 +313,6 @@ body {
 @keyframes fadeInOut {
   0% { opacity: 0; transform: translateY(-10px); }
   100% { opacity: 1; transform: translateY(0); }
-}
-
-.messages-container {
-  overflow-y: auto;
-  position: relative;
-  scroll-behavior: smooth;
-}
-
-.messages-container::-webkit-scrollbar {
-  width: 6px;
-}
-
-.messages-container::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.messages-container::-webkit-scrollbar-thumb {
-  background: rgba(18, 140, 126, 0.3);
-  border-radius: 3px;
-}
-
-.messages-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(18, 140, 126, 0.5);
 }
 
 @media (max-width: 768px) {

@@ -23,9 +23,15 @@ export const MessageContextMenu = ({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [emojiPickerPosition, setEmojiPickerPosition] = useState({ x: 0, y: 0 });
   const [rightClickPosition, setRightClickPosition] = useState({ x: 0, y: 0 });
+  const [longPressTimer, setLongPressTimer] = useState(null);
+  const [longPressMessage, setLongPressMessage] = useState(null);
   const menuRef = useRef(null);
 
   const quickEmojis = ['❤️', '😂', '😮', '😢', '😡'];
+
+  const isMobile = () => {
+    return window.innerWidth <= 768 || 'ontouchstart' in window;
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -59,7 +65,9 @@ export const MessageContextMenu = ({
     };
 
     const handleContextMenu = (e) => {
-      const messageElement = e.target.closest('.message-content');
+      if (isMobile()) return;
+      
+      const messageElement = e.target.closest('.message-content') || e.target.closest('.shared-image');
       if (messageElement) {
         e.preventDefault();
         e.stopPropagation();
@@ -95,16 +103,71 @@ export const MessageContextMenu = ({
       }
     };
 
+    const handleTouchStart = (e) => {
+      if (!isMobile()) return;
+      
+      const messageElement = e.target.closest('.message-content');
+      if (messageElement) {
+        const messageRect = messageElement.getBoundingClientRect();
+        const windowHeight = window.innerHeight;
+        const positionClass = messageRect.bottom > windowHeight / 2 ? 'above-message' : 'below-message';
+        const menuPosition = messageRect.bottom > windowHeight / 2 ? 
+          `${windowHeight - messageRect.top + 10}px` : 
+          `${messageRect.bottom + 10}px`;
+
+        setLongPressTimer(
+          setTimeout(() => {
+            setContextMenu({
+              show: true,
+              position: {
+                menuPosition,
+                positionClass
+              },
+              message: messages.find(m => m.id === messageElement.closest('.message').getAttribute('data-message-id'))
+            });
+            setLongPressMessage(messageElement);
+          }, 500)
+        );
+      }
+    };
+
+    const handleTouchEnd = () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        setLongPressTimer(null);
+      }
+      
+      if (longPressMessage) {
+        setTimeout(() => {
+          longPressMessage.classList.remove('message-long-press');
+          setLongPressMessage(null);
+        }, 300);
+      }
+    };
+
+    const handleTouchMove = () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        setLongPressTimer(null);
+      }
+    };
+
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleEscapeKey);
     document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('touchstart', handleTouchStart, { passive: true });
+    document.addEventListener('touchend', handleTouchEnd, { passive: true });
+    document.addEventListener('touchmove', handleTouchMove, { passive: true });
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleEscapeKey);
       document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('touchstart', handleTouchStart);
+      document.removeEventListener('touchend', handleTouchEnd);
+      document.removeEventListener('touchmove', handleTouchMove);
     };
-  }, [contextMenu.show, showMessageInfo, showEmojiPicker, messages]);
+  }, [contextMenu.show, showMessageInfo, showEmojiPicker, messages, longPressTimer]);
 
   useEffect(() => {
     if (!contextMenu.show) {
@@ -113,6 +176,10 @@ export const MessageContextMenu = ({
   }, [contextMenu.show]);
 
   const calculateEmojiPickerPosition = () => {
+    if (isMobile()) {
+      return;
+    }
+    
     const pickerWidth = 350;
     let x = rightClickPosition.x;
     let y = rightClickPosition.y + 130;
@@ -285,7 +352,9 @@ export const MessageContextMenu = ({
 
   const handlePlusClick = (e) => {
     e.stopPropagation();
-    calculateEmojiPickerPosition();
+    if (!isMobile()) {
+      calculateEmojiPickerPosition();
+    }
     setShowEmojiPicker(true);
   };
 
@@ -377,10 +446,12 @@ export const MessageContextMenu = ({
       {contextMenu.show && !showEmojiPicker && (
         <div
           ref={menuRef}
-          className="message-context-menu"
-          style={{
-            left: contextMenu.position.x,
-            top: contextMenu.position.y,
+          className={`message-context-menu ${contextMenu.position?.positionClass || ''}`}
+          style={isMobile() ? {
+            '--menu-position': contextMenu.position?.menuPosition
+          } : {
+            left: contextMenu.position?.x,
+            top: contextMenu.position?.y,
           }}
         >
           <div className="context-menu-content">
@@ -425,7 +496,7 @@ export const MessageContextMenu = ({
       {showEmojiPicker && (
         <div 
           className="context-emoji-picker" 
-          style={{
+          style={isMobile() ? {} : {
             position: 'fixed',
             left: emojiPickerPosition.x,
             top: emojiPickerPosition.y,

@@ -6,11 +6,12 @@
   bottom: 0;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(8px);
+  z-index: 2000;
+  animation: overlayFadeIn 0.25s ease-out;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2000;
-  animation: overlayFadeIn 0.25s ease-out;
 }
 
 .message-info-modal {
@@ -23,7 +24,8 @@
   overflow: hidden;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
   animation: modalSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  scrollbar-width: none;
+  display: flex;
+  flex-direction: column;
 }
 
 .message-info-modal::-webkit-scrollbar {
@@ -34,9 +36,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px;
+  padding: 22px 20px 16px;
   border-bottom: 1px solid var(--border-color);
-  background: var(--bg-color);
+  background: var(--secondary-bg);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(10px);
 }
 
 .modal-header h3 {
@@ -49,17 +56,19 @@
 
 .close-button {
   background: none;
-  border: none;
+  border: 1px solid var(--border-color);
   color: var(--text-color);
-  font-size: 22px;
+  font-size: 20px;
   cursor: pointer;
   padding: 8px;
-  border-radius: 8px;
+  border-radius: 50%;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.7;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
 }
 
 .close-button:hover {
@@ -72,12 +81,14 @@
 .modal-content {
   padding: 24px;
   overflow-y: auto;
-  max-height: calc(85vh - 88px);
-  scrollbar-width: none;
+  flex: 1;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .modal-content::-webkit-scrollbar {
-  display: none;
+  width: 0;
+  height: 0;
 }
 
 .text-preview {
@@ -158,7 +169,7 @@
 
 .preview-image {
   max-width: 100%;
-  max-height: 200px;
+  max-height: 180px;
   border-radius: 6px;
   object-fit: contain;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
@@ -272,22 +283,56 @@
 }
 
 @media (max-width: 768px) {
+  .message-info-overlay {
+    padding: 10px;
+    padding-top: 70px;
+    align-items: flex-start;
+    top: 10px;
+    height: 627px;
+    overflow: hidden;
+  }
+
   .message-info-modal {
     width: 95%;
-    max-width: 380px;
-    margin: 20px;
+    background: var(--secondary-bg);
+    border-radius: 16px 16px 0 0;
+    margin: 0;
+    animation: modalSlideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .message-info-modal.image-view {
+    height: 557px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .message-info-modal.message-view {
+    height: auto;
+    max-height: fit-content;
+  }
+
+  .modal-content {
+    padding: 20px;
+    overflow-y: auto;
+    flex-grow: 1;
+  }
+
+  .image-view .modal-content {
+    min-height: 0;
   }
   
   .modal-header {
     padding: 18px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    flex-shrink: 0;
   }
   
   .modal-header h3 {
     font-size: 18px;
-  }
-  
-  .modal-content {
-    padding: 20px;
   }
   
   .detail-row {
@@ -319,15 +364,23 @@
   .image-details {
     text-align: left;
   }
+
+  @keyframes modalSlideUp {
+    0% {
+      opacity: 0;
+      transform: translateY(100%);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }
 
 @media (max-width: 480px) {
   .message-info-modal {
-    width: 100%;
-    height: 100vh;
-    max-height: 100vh;
-    border-radius: 0;
-    margin: 0;
+    max-height: 95vh;
+    border-radius: 12px 12px 0 0;
   }
   
   .modal-header {
@@ -336,7 +389,7 @@
   
   .modal-content {
     padding: 16px 20px;
-    max-height: calc(100vh - 72px);
+    max-height: calc(95vh - 65px);
   }
   
   .message-preview {
