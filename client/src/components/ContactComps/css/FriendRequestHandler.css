@@ -1,5 +1,5 @@
 .friend-requests-modal {
-  position: absolute;
+  position: fixed;
   top: 20px;
   right: 20px;
   width: 400px;
@@ -11,6 +11,42 @@
   animation: slideDown 0.3s ease-out;
   backdrop-filter: blur(10px);
   overflow: hidden;
+}
+
+@media screen and (max-width: 768px) {
+  .friend-requests-modal {
+    position: fixed;
+    top: 30%;
+    left: 49%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 400px;
+    max-height: 80vh;
+  }
+  
+  .friend-request-item {
+    padding: 14px 16px;
+  }
+  
+  .request-avatar {
+    width: 40px;
+    height: 40px;
+    margin-right: 12px;
+  }
+  
+  .request-info h4 {
+    font-size: 14px;
+  }
+  
+  .request-info p {
+    font-size: 12px;
+  }
+  
+  .accept-button,
+  .reject-button {
+    width: 34px;
+    height: 34px;
+  }
 }
 
 .contact-list.dark .friend-requests-modal {

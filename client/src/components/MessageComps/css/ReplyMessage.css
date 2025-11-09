@@ -154,7 +154,13 @@
 
 @media (max-width: 768px) {
   .reply-message-container {
-    margin: 8px 10px;
+    position: fixed ;
+    bottom: 60px ;
+    left: 0 ;
+    right: 0 ;
+    margin: 0 10px ;
+    z-index: 99 ;
+    width: calc(100vw - 20px) ;
   }
   
   .reply-content {

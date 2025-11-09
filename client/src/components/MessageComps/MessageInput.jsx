@@ -55,6 +55,8 @@ export const MessageInput = ({
     }
   }, [showAttachMenu, setShowAttachMenu]);
 
+  const hasText = inputMessage && inputMessage.trim().length > 0;
+
   return (
     <form onSubmit={onSubmit} className="message-input-container">
       <button
@@ -112,16 +114,19 @@ export const MessageInput = ({
         onChange={(e) => setInputMessage(e.target.value)}
         className="message-input"
       />
-      <button
-        type="button"
-        className={`mic-button ${isRecording ? 'recording' : ''}`}
-        onClick={() => setIsRecording(!isRecording)}
-      >
-        <FiMic />
-      </button>
-      <button type="submit" className="send-button">
-        <FiSend />
-      </button>
+      {!hasText ? (
+        <button
+          type="button"
+          className={`mic-button ${isRecording ? 'recording' : ''}`}
+          onClick={() => setIsRecording(!isRecording)}
+        >
+          <FiMic />
+        </button>
+      ) : (
+        <button type="submit" className="send-button">
+          <FiSend />
+        </button>
+      )}
     </form>
   );
 };

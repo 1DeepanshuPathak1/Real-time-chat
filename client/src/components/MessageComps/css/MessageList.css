@@ -209,17 +209,25 @@
 
 .messages-scroll {
   height: 100%;
-  overflow-y: overlay;
+  overflow-y: scroll;
   padding: 20px;
   position: relative;
   z-index: 1;
-  -webkit-scrollbar-width: none; 
-  scrollbar-width: none; 
-  -ms-overflow-style: none; 
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-.messages-scroll::-webkit-scrollbar {
-    display: none;
+.messages-scroll::-webkit-scrollbar,
+.messages-scroll::-webkit-scrollbar-thumb,
+.messages-scroll::-webkit-scrollbar-track,
+.messages-scroll::-webkit-scrollbar-button,
+.messages-scroll::-webkit-scrollbar-corner {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
 }
 
 .conversation-start {

@@ -38,6 +38,20 @@
     color: var(--accent-color);
     margin: 0 10px;
     transition: all 0.3s ease;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.send-button {
+    animation: buttonFadeIn 0.3s ease-in-out;
+}
+
+.mic-button {
+    animation: buttonFadeIn 0.3s ease-in-out;
 }
 
 .send-button:hover,
@@ -58,7 +72,7 @@
 
 .mic-button.recording {
     color: #ff0000;
-    animation: pulse 1s infinite;
+    animation: pulse 1s infinite, buttonFadeIn 0.3s ease-in-out;
 }
 
 @keyframes pulse {
@@ -72,6 +86,17 @@
 
     100% {
         transform: scale(1);
+    }
+}
+
+@keyframes buttonFadeIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.8) rotate(-90deg);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) rotate(0deg);
     }
 }
 
@@ -115,4 +140,43 @@
 .attach-menu button svg {
     font-size: 20px;
     color: var(--accent-color);
+}
+
+@media (max-width: 768px) {
+    .message-input-container {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100vw !important;
+        padding: 10px !important;
+        background-color: var(--secondary-bg) !important;
+        border-top: 1px solid var(--border-color) !important;
+        z-index: 100 !important;
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        margin: 0 !important;
+        transform: none !important;
+    }
+
+    .send-button,
+    .emoji-button,
+    .attach-button,
+    .mic-button {
+        font-size: 22px;
+        margin: 0 5px;
+        width: 40px;
+        height: 40px;
+    }
+
+    .message-input {
+        padding: 10px 12px;
+        font-size: 14px;
+    }
+
+    .attach-menu {
+        bottom: 70px;
+        left: 10px;
+    }
 }

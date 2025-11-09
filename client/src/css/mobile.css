@@ -27,13 +27,15 @@
   .contact-list {
     width: 100%;
     max-width: 100%;
-    position: absolute;
+    position: fixed;
     left: 0;
     top: 0;
     height: 100vh;
     z-index: 10;
     transition: transform 0.3s ease-in-out;
-    overflow-y: auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
 
   .contact-list.hidden {
@@ -42,7 +44,7 @@
 
   .chat-window {
     width: 100%;
-    position: absolute;
+    position: fixed;
     left: 0;
     top: 0;
     height: 100vh;
@@ -85,6 +87,8 @@
     padding: 15px 10px;
     flex-shrink: 0;
     height: auto;
+    position: relative;
+    z-index: 10;
   }
 
   .chat-header-info {
@@ -110,12 +114,15 @@
     overflow-x: hidden;
     width: 100%;
     -webkit-overflow-scrolling: touch;
+    position: relative;
+    height: calc(100vh - 160px);
   }
 
   .messages-scroll {
-    padding: 20px 10px;
+    padding: 20px 10px 110px 0px;
     overflow-x: hidden;
     width: 100%;
+    min-height: 100%;
   }
 
   .message {
@@ -130,6 +137,7 @@
 
   .message.received {
     justify-content: flex-start;
+    padding-left: 10px;
   }
 
   .message-content {
@@ -153,33 +161,102 @@
   }
 
   .message-input-container {
+    position: fixed !important;
+    bottom: 55px !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100vw !important;
     flex-shrink: 0;
     padding: 10px;
+    background-color: var(--secondary-bg);
+    border-top: 1px solid var(--border-color);
+    z-index: 100 !important;
+    display: flex !important;
+    visibility: visible !important;
+  }
+
+  .reply-message-container {
+    position: fixed !important;
+    bottom: 120px !important;
+    left: 5px !important;
+    right: 0 !important;
+    z-index: 99 !important;
+    margin: 0 !important;
   }
 
   .emoji-picker-container {
-    bottom: 70px;
+    position: fixed !important;
+    bottom: 70px !important;
     left: 10px;
     right: 10px;
     max-width: calc(100vw - 20px);
+    z-index: 98 !important;
+  }
+
+  .contact-list-header {
+    flex-shrink: 0;
+    position: relative;
+    z-index: 5;
+  }
+
+  .contact-list-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    height: auto;
+    min-height: 0;
+  }
+
+  .emoji-button, .attach-button {
+    margin: 0;
   }
 
   .contact-list-footer-container {
     flex-shrink: 0;
-    position: relative;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100vw !important;
+    z-index: 50 !important;
+    background: var(--bg-color);
+    border-top: 1px solid var(--border-color);
+  }
+
+  .contact-list.hidden .contact-list-footer-container {
+    transform: translateX(-100%);
   }
 
   .footer-toggle {
-    position: relative;
-    top: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-bottom: 5px;
+    position: absolute !important;
+    top: -15px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    z-index: 51 !important;
+    width: 30px;
+    height: 30px;
+    background: linear-gradient(135deg, var(--secondary-bg));
+    border: 2px solid var(--border-color);
+    border-radius: 50%;
+    color: var(--text-color);
+    cursor: pointer;
+    display: flex !important;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    visibility: visible !important;
+    opacity: 1 !important;
   }
 
-  .contact-list-scroll {
-    height: calc(100vh - 200px);
-    overflow-y: auto;
+  .contact-list-footer {
+    width: 100%;
+  }
+
+  .contact-list-footer.show {
+    height: 71px;
+    padding: 15px;
+    opacity: 1;
   }
 }
 
@@ -196,5 +273,13 @@
   .chat-window {
     position: relative;
     transform: none !important;
+  }
+  
+  .message-input-container {
+    position: relative;
+  }
+
+  .contact-list-footer-container {
+    position: relative;
   }
 }
