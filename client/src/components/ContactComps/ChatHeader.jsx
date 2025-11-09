@@ -6,31 +6,33 @@ export const ChatHeader = ({ selectedContact, isDark, contactStatus, onBackClick
 
   return (
     <div className={`chat-header ${isDark ? 'dark' : 'light'}`}>
-      {showBackButton && (
-        <button className="mobile-back-button" onClick={onBackClick}>
-          <FiArrowLeft />
-        </button>
-      )}
-      <div className="chat-header-info">
-        <img
-          src={`https://api.dicebear.com/6.x/initials/svg?seed=${selectedContact.name}`}
-          alt={selectedContact.name}
-          className="chat-header-avatar"
-        />
-        <div className="chat-header-details">
-          <h2>{selectedContact.name}</h2>
-          <span className="status-text">
-            {contactStatus?.isOnline ? (
-              <span className="online-status">
-                <span className="status-dot online"></span>
-                Online
-              </span>
-            ) : (
-              <span className="offline-status">
-                {contactStatus?.lastSeen || 'Last seen recently'}
-              </span>
-            )}
-          </span>
+      <div className="chat-header-wrapper">
+        {showBackButton && (
+          <button className="mobile-back-button" onClick={onBackClick}>
+            <FiArrowLeft />
+          </button>
+        )}
+        <div className="chat-header-info">
+          <img
+            src={`https://api.dicebear.com/6.x/initials/svg?seed=${selectedContact.name}`}
+            alt={selectedContact.name}
+            className="chat-header-avatar"
+          />
+          <div className="chat-header-details">
+            <h2>{selectedContact.name}</h2>
+            <span className="status-text">
+              {contactStatus?.isOnline ? (
+                <span className="online-status">
+                  <span className="status-dot online"></span>
+                  Online
+                </span>
+              ) : (
+                <span className="offline-status">
+                  {contactStatus?.lastSeen || 'Last seen recently'}
+                </span>
+              )}
+            </span>
+          </div>
         </div>
       </div>
     </div>

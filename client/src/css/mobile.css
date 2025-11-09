@@ -1,6 +1,27 @@
 @media (max-width: 768px) {
+  html, body {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+  }
+
+  .app-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+  }
+
   .chat-container {
     position: relative;
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
   }
 
   .contact-list {
@@ -12,6 +33,7 @@
     height: 100vh;
     z-index: 10;
     transition: transform 0.3s ease-in-out;
+    overflow-y: auto;
   }
 
   .contact-list.hidden {
@@ -24,9 +46,12 @@
     left: 0;
     top: 0;
     height: 100vh;
-    z-index: 5;
+    z-index: 15;
     transform: translateX(100%);
     transition: transform 0.3s ease-in-out;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
   .chat-window.active {
@@ -45,6 +70,7 @@
     cursor: pointer;
     font-size: 24px;
     margin-right: 10px;
+    flex-shrink: 0;
     transition: all 0.2s ease;
   }
 
@@ -57,12 +83,103 @@
     display: flex;
     align-items: center;
     padding: 15px 10px;
+    flex-shrink: 0;
+    height: auto;
   }
 
-  .chat-header-content {
+  .chat-header-info {
     display: flex;
     align-items: center;
     flex: 1;
+    justify-content: center;
+  }
+
+  .chat-header-avatar {
+    width: 40px;
+    height: 40px;
+    margin-right: 12px;
+  }
+
+  .chat-header-details {
+    text-align: center;
+  }
+
+  .messages-container {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    width: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .messages-scroll {
+    padding: 20px 10px;
+    overflow-x: hidden;
+    width: 100%;
+  }
+
+  .message {
+    margin-bottom: 15px;
+    max-width: 100%;
+    display: flex;
+  }
+
+  .message.sent {
+    justify-content: flex-end;
+  }
+
+  .message.received {
+    justify-content: flex-start;
+  }
+
+  .message-content {
+    max-width: 80%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .image-message-container {
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .shared-image {
+    max-width: 100%;
+    max-height: 250px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+  }
+
+  .message-input-container {
+    flex-shrink: 0;
+    padding: 10px;
+  }
+
+  .emoji-picker-container {
+    bottom: 70px;
+    left: 10px;
+    right: 10px;
+    max-width: calc(100vw - 20px);
+  }
+
+  .contact-list-footer-container {
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .footer-toggle {
+    position: relative;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 5px;
+  }
+
+  .contact-list-scroll {
+    height: calc(100vh - 200px);
+    overflow-y: auto;
   }
 }
 

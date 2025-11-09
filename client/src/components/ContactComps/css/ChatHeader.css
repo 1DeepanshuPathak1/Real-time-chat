@@ -20,6 +20,12 @@
   --status-color: #64748b;
 }
 
+.chat-header-wrapper {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
 .chat-header-info {
   display: flex;
   align-items: center;
@@ -77,4 +83,55 @@
 
 .offline-status {
   color: var(--status-color);
+}
+
+@media (max-width: 768px) {
+  .chat-header {
+    padding: 15px 10px;
+  }
+
+  .chat-header-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    width: 100%;
+    position: relative;
+  }
+
+  .mobile-back-button {
+    position: relative;
+    left: 0;
+    margin-right: 10px;
+    flex-shrink: 0;
+  }
+
+  .chat-header-info {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .chat-header-avatar {
+    width: 35px;
+    height: 35px;
+    margin-right: 10px;
+  }
+
+  .chat-header-details {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .chat-header-details h2 {
+    font-size: 16px;
+  }
+
+  .status-text {
+    font-size: 12px;
+  }
 }
