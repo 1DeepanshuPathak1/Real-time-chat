@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
@@ -23,7 +23,9 @@ import { useScrollManager } from './components/ChatComps/ScrollManager';
 import { useUIState } from './components/ChatComps/UIStateManager';
 import { useEventHandlers } from './components/ChatComps/EventHandler';
 import './css/Chat.css';
+import './css/mobile.css';
 import { useNavigate } from 'react-router-dom';
+import { FiArrowLeft } from 'react-icons/fi';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -45,6 +47,9 @@ function ChatContent() {
   const fileInputRef = useRef(null);
   const documentInputRef = useRef(null);
   const videoRef = useRef(null);
+
+  const [isMobileView, setIsMobileView] = useState(false);
+  const [showChat, setShowChat] = useState(false);
 
   const { user, loading } = useAuthState(auth, navigate);
   useUserStatus(user);
@@ -139,6 +144,37 @@ function ChatContent() {
     cancelCapture
   );
 
+  useEffect(() => {
+    const checkMobileView = () => {
+      setIsMobileView(window.innerWidth <= 768);
+    };
+
+    checkMobileView();
+    window.addEventListener('resize', checkMobileView);
+
+    return () => window.removeEventListener('resize', checkMobileView);
+  }, []);
+
+  useEffect(() => {
+    if (isMobileView && selectedContact) {
+      setShowChat(true);
+    } else if (isMobileView && !selectedContact) {
+      setShowChat(false);
+    }
+  }, [selectedContact, isMobileView]);
+
+  const handleMobileContactClick = (contact) => {
+    handleContactClick(contact);
+    if (isMobileView) {
+      setShowChat(true);
+    }
+  };
+
+  const handleMobileBackClick = () => {
+    setShowChat(false);
+    setSelectedContact(null);
+  };
+
   if (loading) {
     return (
       <div className="loading-container">
@@ -157,20 +193,23 @@ function ChatContent() {
         <ContactList
           contacts={contacts}
           selectedContact={selectedContact}
-          onContactClick={handleContactClick}
+          onContactClick={handleMobileContactClick}
           user={user}
           onThemeChange={(newTheme) => handleThemeChange(newTheme, setIsDark)}
           isDark={isDark}
           onContactUpdate={updateContactUnreadCount}
           onContactStatusUpdate={handleContactStatusUpdate}
+          className={isMobileView && showChat ? 'hidden' : ''}
         />
-        <div className="chat-window">
+        <div className={`chat-window ${isMobileView && showChat ? 'active' : ''}`}>
           {selectedContact ? (
             <>
               <ChatHeader
                 selectedContact={selectedContact}
                 isDark={isDark}
                 contactStatus={selectedContactStatus}
+                onBackClick={isMobileView ? handleMobileBackClick : null}
+                showBackButton={isMobileView}
               />
               <div className="messages-container" ref={messagesContainerRef} onScroll={handleScroll}>
                 <ParticlesBackground key={selectedContact?.roomID} isDark={isDark} />

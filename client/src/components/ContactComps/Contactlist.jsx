@@ -48,7 +48,17 @@ const ContactItem = ({ contact, selectedContact, handleContactClick, onStatusUpd
   );
 };
 
-export const ContactList = ({ contacts, selectedContact, onContactClick, user, onThemeChange, isDark, onContactUpdate, onContactStatusUpdate }) => {
+export const ContactList = ({ 
+  contacts, 
+  selectedContact, 
+  onContactClick, 
+  user, 
+  onThemeChange, 
+  isDark, 
+  onContactUpdate, 
+  onContactStatusUpdate,
+  className = ''
+}) => {
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [friendEmail, setFriendEmail] = useState('');
   const [copied, setCopied] = useState(false);
@@ -171,7 +181,7 @@ export const ContactList = ({ contacts, selectedContact, onContactClick, user, o
   }, [onContactStatusUpdate]);
 
   return (
-    <div className={`contact-list ${isDark ? 'dark' : 'light'}`}>
+    <div className={`contact-list ${isDark ? 'dark' : 'light'} ${className}`}>
       <div className="contact-list-header">
         <h1>Chats</h1>
         <div className="header-actions">

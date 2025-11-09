@@ -1,10 +1,16 @@
+import { FiArrowLeft } from 'react-icons/fi';
 import './css/ChatHeader.css';
 
-export const ChatHeader = ({ selectedContact, isDark, contactStatus }) => {
+export const ChatHeader = ({ selectedContact, isDark, contactStatus, onBackClick, showBackButton }) => {
   if (!selectedContact) return null;
 
   return (
     <div className={`chat-header ${isDark ? 'dark' : 'light'}`}>
+      {showBackButton && (
+        <button className="mobile-back-button" onClick={onBackClick}>
+          <FiArrowLeft />
+        </button>
+      )}
       <div className="chat-header-info">
         <img
           src={`https://api.dicebear.com/6.x/initials/svg?seed=${selectedContact.name}`}
